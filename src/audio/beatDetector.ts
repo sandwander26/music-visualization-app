@@ -2,8 +2,15 @@ export class BeatDetector {
   private threshold = 1.15
   private history: number[] = []
   private maxHistory = 43
+  private holdCounter = 0
+  private beatHold = 22
 
   detect(audioData: Float32Array): boolean {
+    if (this.holdCounter > 0) {
+      this.holdCounter--
+      return false
+    }
+
     let bassEnergy = 0
     for (let i = 0; i < 14; i++) {
       bassEnergy += audioData[i]
@@ -19,6 +26,16 @@ export class BeatDetector {
     }
 
     const avg = this.history.reduce((sum, v) => sum + v, 0) / this.history.length
-    return bassEnergy > avg * this.threshold
+
+    if (bassEnergy > avg * this.threshold) {
+      this.holdCounter = this.beatHold
+      return true
+    }
+    return false
+  }
+
+  reset(): void {
+    this.history = []
+    this.holdCounter = 0
   }
 }
