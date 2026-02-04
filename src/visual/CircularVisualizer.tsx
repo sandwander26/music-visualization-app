@@ -10,8 +10,10 @@ export function CircularVisualizer() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    let rafId = 0
+
     const draw = () => {
-      const { audioData } = useAudioStore.getState()
+      const { audioData, beat } = useAudioStore.getState()
       const w = canvas.width
       const h = canvas.height
 
@@ -36,9 +38,18 @@ export function CircularVisualizer() {
       ctx.closePath()
       ctx.stroke()
 
-      requestAnimationFrame(draw)
+      if (beat) {
+        ctx.fillStyle = 'rgba(124, 207, 255, 0.25)'
+        ctx.fillRect(0, 0, w, h)
+      }
+
+      rafId = requestAnimationFrame(draw)
     }
-    requestAnimationFrame(draw)
+    rafId = requestAnimationFrame(draw)
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [])
 
   return (
