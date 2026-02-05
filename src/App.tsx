@@ -1,4 +1,5 @@
 import { useThemeStore } from './store/themeStore'
+import { CircularVisualizer } from './visual/CircularVisualizer'
 import './styles/theme.css'
 
 function App() {
@@ -6,8 +7,9 @@ function App() {
 
   return (
     <div className="app-root" data-theme={theme}>
-      <h1>Loomi</h1>
-      <p>Music visualization app</p>
+      <div className="viz-stage">
+        <CircularVisualizer />
+      </div>
     </div>
   )
 }
