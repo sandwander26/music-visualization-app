@@ -11,25 +11,31 @@ export function CircularVisualizer() {
     if (!ctx) return
 
     let rafId = 0
+    let kickPulse = 0
 
     const draw = () => {
       const { audioData, beat } = useAudioStore.getState()
       const w = canvas.width
       const h = canvas.height
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)'
       ctx.fillRect(0, 0, w, h)
 
       const cx = w / 2
       const cy = h / 2
 
+      if (beat) kickPulse = 1
+      kickPulse *= 0.9
+
       ctx.strokeStyle = '#7cf'
-      ctx.lineWidth = 2
+      ctx.lineWidth = 2 + kickPulse * 3
+      ctx.shadowColor = '#7cf'
+      ctx.shadowBlur = 8 + kickPulse * 20
       ctx.beginPath()
       for (let i = 0; i < 64; i++) {
         const angle = (i / 64) * Math.PI * 2
         const bin = Math.floor((i / 64) * audioData.length)
-        const radius = 120 + audioData[bin] * 200
+        const radius = 120 + audioData[bin] * 220 + kickPulse * 30
         const x = cx + Math.cos(angle) * radius
         const y = cy + Math.sin(angle) * radius
         if (i === 0) ctx.moveTo(x, y)
@@ -37,11 +43,7 @@ export function CircularVisualizer() {
       }
       ctx.closePath()
       ctx.stroke()
-
-      if (beat) {
-        ctx.fillStyle = 'rgba(124, 207, 255, 0.25)'
-        ctx.fillRect(0, 0, w, h)
-      }
+      ctx.shadowBlur = 0
 
       rafId = requestAnimationFrame(draw)
     }
