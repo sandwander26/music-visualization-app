@@ -178,3 +178,182 @@ export function BarcodeVisualizer() {
       W: number, H: number,
       bi: number,
       flareScale: number,
+      scl: number,
+    ) {
+      const parts = particlesRef.current
+      const alive: LensParticle[] = []
+
+      for (const p of parts) {
+        if (p.life > 0) {
+          p.life -= 1 / p.maxLife
+          if (p.life <= 0) continue
+        }
+
+        p.x += p.vx
+        p.y += p.vy
+        if (p.x < 0 || p.x > W) p.vx *= -1
+        if (p.y < 0 || p.y > H) p.vy *= -1
+
+        const beatScale = p.life === -1 ? flareScale : 1.0
+        const pulseSize = (p.baseSize + bi * 6 * scl) * beatScale
+        p.size = pulseSize
+
+        const lifeAlpha = p.life > 0 ? p.life : 1.0
+
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size)
+        grad.addColorStop(0, `rgba(255,255,220,${(0.5 + bi * 0.3) * lifeAlpha})`)
+        grad.addColorStop(0.5, `rgba(255,255,180,${(0.15 + bi * 0.1) * lifeAlpha})`)
+        grad.addColorStop(1, 'rgba(255,255,180,0)')
+
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+        ctx.fill()
+
+        if (p.isStar) {
+          ctx.strokeStyle = `rgba(255,255,220,${(0.25 + bi * 0.2) * lifeAlpha})`
+          ctx.lineWidth = 1
+          const len = p.size * 1.5
+          ctx.beginPath()
+          ctx.moveTo(p.x - len, p.y)
+          ctx.lineTo(p.x + len, p.y)
+          ctx.moveTo(p.x, p.y - len)
+          ctx.lineTo(p.x, p.y + len)
+          ctx.stroke()
+        }
+
+        alive.push(p)
+      }
+
+      particlesRef.current = alive
+    }
+
+    function draw() {
+      if (!canvas || !ctx) return
+
+      const now = performance.now()
+      const elapsed = now - lastFrameTime
+      if (elapsed < FRAME_INTERVAL) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
+      lastFrameTime = now - (elapsed % FRAME_INTERVAL)
+
+      const { audioData, beat, energy, trackInfo } = useAudioStore.getState()
+
+      const W = canvas.width
+      const H = canvas.height
+      const isVertical = H > W * 1.2
+      const scl = Math.min(W, H) / 1080
+
+      const pp = paramsRef.current
+      const barCount = Math.max(20, Math.min(MAX_BAR_COUNT, Math.floor(pp.barCount)))
+      const barHeightMul = Math.max(0, pp.barHeight)
+      const smoothParam = Math.max(0, Math.min(0.95, pp.smoothing))
+      const hueSpeedMul = Math.max(0, pp.hueSpeed)
+
+      const barWidth = BAR_WIDTH_BASE * scl
+      const barStep = (BAR_WIDTH_BASE + BAR_GAP_BASE) * scl
+      const maxBarH = MAX_BAR_HEIGHT_BASE * scl * barHeightMul
+
+      if (beat) {
+        beatIntensityRef.current = 1.0
+        flareScaleRef.current = 2.0
+        particlesRef.current.push(createParticle(W, H, true, scl))
+      } else {
+        beatIntensityRef.current *= 0.85
+        flareScaleRef.current += (1.0 - flareScaleRef.current) * 0.15
+      }
+      const bi = beatIntensityRef.current
+
+      const smoothed = smoothedBarsRef.current
+      for (let i = 0; i < barCount; i++) {
+        const idx = (i * 2) % 128
+        const raw = audioData[idx] ?? 0
+        smoothed[i] = smoothed[i] * smoothParam + raw * (1 - smoothParam)
+      }
+
+      hueOffsetRef.current += 0.5 * hueSpeedMul
+
+      const zoom = 1.0 + bi * 0.03
+      ctx.setTransform(zoom, 0, 0, zoom, W * (1 - zoom) / 2, H * (1 - zoom) / 2)
+
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, W, H)
+
+      const chroma = 2 * scl
+      if (energy > 0.06) {
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, -chroma, 'r', isVertical, barWidth, barStep, maxBarH, barCount)
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, 0, 'g', isVertical, barWidth, barStep, maxBarH, barCount)
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, chroma, 'b', isVertical, barWidth, barStep, maxBarH, barCount)
+      } else {
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, 0, 'r', isVertical, barWidth, barStep, maxBarH, barCount)
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, 0, 'g', isVertical, barWidth, barStep, maxBarH, barCount)
+        drawBarcodeLayer(ctx, W, H, smoothed, hueOffsetRef.current, bi, 0, 'b', isVertical, barWidth, barStep, maxBarH, barCount)
+      }
+
+      const glitchShift = 60 * scl
+      const sliceH = Math.max(6, Math.round(10 * scl))
+      if (beat) {
+        glitchRef.current = Array.from({ length: 5 }, () => ({
+          y: Math.random() * H,
+          offset: (Math.random() - 0.5) * glitchShift,
+          frames: 3,
+        }))
+
+        vGlitchFramesRef.current = 3
+        vGlitchOffsetRef.current = (Math.random() - 0.5) * 6 * scl
+      }
+
+      const activeGlitches: GlitchSlice[] = []
+      for (const g of glitchRef.current) {
+        if (g.frames > 0) {
+          const safeY = Math.max(0, Math.min(H - sliceH, Math.floor(g.y)))
+          const imgData = ctx.getImageData(0, safeY, W, sliceH)
+          ctx.putImageData(imgData, Math.floor(g.offset), safeY)
+          g.frames--
+          activeGlitches.push(g)
+        }
+      }
+      glitchRef.current = activeGlitches
+
+      if (vGlitchFramesRef.current > 0) {
+        const halfW = Math.floor(W / 2)
+        const imgData = ctx.getImageData(halfW, 0, halfW, H)
+        ctx.putImageData(imgData, halfW, Math.floor(vGlitchOffsetRef.current))
+        vGlitchFramesRef.current--
+      }
+
+      drawScanlines(ctx, W, H, scl)
+
+      drawTrackTitle(ctx, W, H, bi, trackInfo.title)
+
+      drawParticles(ctx, W, H, bi, flareScaleRef.current, scl)
+
+      drawGrain(ctx, W, H)
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'block',
+        zIndex: 0,
+      }}
+    />
+  )
+}
