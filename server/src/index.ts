@@ -131,3 +131,77 @@ app.post('/auth/forgot-password', async (req, res) => {
   if (!row) {
     res.json(payload)
     return
+  }
+
+  if (isRateLimited(row.id)) {
+    res.status(429).json({ error: 'слишком много запросов — попробуйте через час' })
+    return
+  }
+
+  try {
+    const code = createPasswordResetToken(row.id)
+    const channel = await sendPasswordResetEmail(email, code)
+    payload.delivery = channel
+    if (channel === 'sent') {
+      payload.message =
+        'Код отправлен на почту. Проверьте входящие и папку «Спам» (письмо может идти 1–2 минуты).'
+    } else {
+      payload.message =
+        'Почта не настроена на сервере (SMTP). Код выведен в консоль, где запущен npm run server:dev.'
+      if (process.env.NODE_ENV !== 'production') {
+        payload.devResetCode = code
+      }
+    }
+    res.json(payload)
+  } catch (err) {
+    console.error('[mail] forgot-password:', err)
+    res.status(503).json({ error: 'не удалось отправить письмо — проверьте SMTP' })
+  }
+})
+
+app.post('/auth/reset-password', (req, res) => {
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const token = String(req.body?.token ?? '').trim()
+  const newPassword = String(req.body?.newPassword ?? '')
+
+  if (!email || !token) {
+    res.status(400).json({ error: 'укажите email и код из письма' })
+    return
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: 'новый пароль минимум 8 символов' })
+    return
+  }
+
+  const consumed = consumePasswordResetToken(email, token)
+  if ('error' in consumed) {
+    res.status(400).json({ error: consumed.error })
+    return
+  }
+
+  const hash = bcrypt.hashSync(newPassword, 10)
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, consumed.userId)
+  res.json({ ok: true, message: 'пароль обновлён — войдите с новым паролем' })
+})
+
+app.post('/auth/login', (req, res) => {
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const password = String(req.body?.password ?? '')
+
+  const row = db
+    .prepare('SELECT id, email, password_hash, display_name FROM users WHERE email = ?')
+    .get(email) as
+    | { id: string; email: string; password_hash: string; display_name: string | null }
+    | undefined
+
+  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+    res.status(401).json({ error: 'неверный email или пароль' })
+    return
+  }
+
+  res.json({
+    token: issueToken(row.id, row.email),
