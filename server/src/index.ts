@@ -205,3 +205,92 @@ app.post('/auth/login', (req, res) => {
 
   res.json({
     token: issueToken(row.id, row.email),
+    user: {
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      hasAvatar: userHasAvatar(row.id),
+    },
+  })
+})
+
+function userResponse(userId: string): {
+  id: string
+  email: string
+  displayName: string | null
+  hasAvatar: boolean
+} | null {
+  const row = db
+    .prepare('SELECT id, email, display_name FROM users WHERE id = ?')
+    .get(userId) as { id: string; email: string; display_name: string | null } | undefined
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    hasAvatar: userHasAvatar(row.id),
+  }
+}
+
+function verifyCurrentPassword(userId: string, password: string): boolean {
+  const row = db
+    .prepare('SELECT password_hash FROM users WHERE id = ?')
+    .get(userId) as { password_hash: string } | undefined
+  if (!row) return false
+  return bcrypt.compareSync(password, row.password_hash)
+}
+
+app.get('/me', requireAuth, (req: AuthedRequest, res) => {
+  const user = userResponse(req.userId!)
+  if (!user) {
+    res.status(404).json({ error: 'пользователь не найден' })
+    return
+  }
+  const used = audioBytesUsed(req.userId!)
+  res.json({
+    user,
+    storage: {
+      audioBytesUsed: used,
+      audioQuotaBytes: AUDIO_QUOTA_BYTES,
+      audioBytesFree: Math.max(0, AUDIO_QUOTA_BYTES - used),
+    },
+  })
+})
+
+app.patch('/me/email', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const currentPassword = String(req.body?.currentPassword ?? '')
+  const newEmail = String(req.body?.newEmail ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!currentPassword) {
+    res.status(400).json({ error: 'введите текущий пароль' })
+    return
+  }
+  if (!verifyCurrentPassword(userId, currentPassword)) {
+    res.status(401).json({ error: 'неверный текущий пароль' })
+    return
+  }
+  if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    res.status(400).json({ error: 'некорректный email' })
+    return
+  }
+
+  const self = db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as
+    | { email: string }
+    | undefined
+  if (!self) {
+    res.status(404).json({ error: 'пользователь не найден' })
+    return
+  }
+  if (newEmail === self.email.toLowerCase()) {
+    res.status(400).json({ error: 'это уже ваш email' })
+    return
+  }
+
+  const taken = db
+    .prepare('SELECT id FROM users WHERE email = ? AND id != ?')
+    .get(newEmail, userId)
+  if (taken) {
+    res.status(409).json({ error: 'email уже занят' })
