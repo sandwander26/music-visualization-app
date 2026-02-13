@@ -252,3 +252,225 @@ export function StarfieldVisualizer() {
     }
 
     const nebulaClouds: NebulaCloud[] = []
+    for (let i = 0; i < NEBULA_CLOUD_COUNT; i++) {
+      nebulaClouds.push(createNebulaCloud(lw, lh, i))
+    }
+
+    let prevBeat = false
+    let driftTime = 0
+    let shakeX = 0
+    let shakeY = 0
+    let beatFlash = 0
+    let warpFlash = 0
+    let currentSpeed = 0
+    let rafId = 0
+    const smokeClouds: VolumetricCloud[] = []
+    const shootingStars: ShootingStar[] = []
+    let nextShootingStarIn = SHOOTING_STAR_MIN_INTERVAL + Math.floor(Math.random() * (SHOOTING_STAR_MAX_INTERVAL - SHOOTING_STAR_MIN_INTERVAL))
+    let globalHue = 0
+    let camOffsetX = 0
+    let camOffsetY = 0
+
+    const FRAME_INTERVAL = 1000 / 60
+    let lastFrameTime = 0
+
+    function animate(): void {
+      const now = performance.now()
+      const elapsed = now - lastFrameTime
+      if (elapsed < FRAME_INTERVAL) {
+        rafId = requestAnimationFrame(animate)
+        return
+      }
+      lastFrameTime = now - (elapsed % FRAME_INTERVAL)
+
+      ctx!.clearRect(0, 0, lw, lh)
+      const energy = energyRef.current
+      const beat = beatRef.current
+      const minDim = Math.min(lw, lh)
+      const scl = minDim / 1080
+      const shakeScl = minDim / 900
+
+      const pp = paramsRef.current
+      const desiredStarCount = Math.max(500, Math.min(MAX_STAR_COUNT, Math.floor(pp.starCount)))
+      const speedMult = Math.max(0, pp.speed)
+      const userHueShift = pp.hueShift
+      const nebulaMult = Math.max(0, pp.nebulaIntensity)
+      const trailFadeBase = Math.max(0, pp.trailFade)
+
+      while (stars.length < desiredStarCount) stars.push(createStar(true, lw, lh))
+      if (stars.length > desiredStarCount) stars.length = desiredStarCount
+      const activeStars = stars.length
+
+      const beatFront = beat && !prevBeat
+      prevBeat = beat
+
+      const targetSpeed = (BASE_SPEED + energy * MAX_ENERGY_SPEED) * speedMult
+      currentSpeed += (targetSpeed - currentSpeed) * 0.08
+
+      if (beatFront) {
+        shakeX = (Math.random() - 0.5) * 2 * SHAKE_STRENGTH * shakeScl
+        shakeY = (Math.random() - 0.5) * 2 * SHAKE_STRENGTH * shakeScl
+        beatFlash = 1
+        warpFlash = 1
+        currentSpeed += BEAT_SPEED_BURST
+        if (smokeClouds.length >= CLOUD_MAX_ACTIVE) smokeClouds.shift()
+        smokeClouds.push(createVolumetricCloud(Math.random() * lw, Math.random() * lh))
+      }
+      shakeX *= SHAKE_DECAY
+      shakeY *= SHAKE_DECAY
+      beatFlash *= 0.9
+      warpFlash *= WARP_FLASH_DECAY
+
+      nextShootingStarIn--
+      if (nextShootingStarIn <= 0) {
+        shootingStars.push(createShootingStar(lw, lh))
+        nextShootingStarIn = SHOOTING_STAR_MIN_INTERVAL + Math.floor(Math.random() * (SHOOTING_STAR_MAX_INTERVAL - SHOOTING_STAR_MIN_INTERVAL))
+      }
+      if (beatFront && Math.random() < 0.5) {
+        shootingStars.push(createShootingStar(lw, lh))
+        if (Math.random() < 0.3) shootingStars.push(createShootingStar(lw, lh))
+      }
+
+      globalHue = (globalHue + HUE_SHIFT_SPEED) % 360
+
+      const audioData = audioDataRef.current
+      const bandEnergies = new Float32Array(FREQ_BANDS)
+      if (audioData.length > 0) {
+        const bandSize = Math.floor(audioData.length / FREQ_BANDS)
+        for (let b = 0; b < FREQ_BANDS; b++) {
+          let sum = 0
+          const start = b * bandSize
+          for (let j = start; j < start + bandSize && j < audioData.length; j++) {
+            sum += Math.abs(audioData[j])
+          }
+          bandEnergies[b] = sum / bandSize
+        }
+      }
+
+      driftTime++
+      camOffsetX = Math.sin(driftTime * 0.08) * 12 * shakeScl
+      camOffsetY = Math.cos(driftTime * 0.06) * 8 * shakeScl
+      const cx = lw / 2 + shakeX + camOffsetX
+      const cy = lh / 2 + shakeY + camOffsetY
+
+      const trailAlpha = Math.min(0.35, trailFadeBase + currentSpeed * 0.015)
+      ctx!.fillStyle = `rgba(0, 0, 0, ${trailAlpha})`
+      ctx!.fillRect(0, 0, lw, lh)
+
+      for (let ni = 0; ni < NEBULA_CLOUD_COUNT; ni++) {
+        const cloud = nebulaClouds[ni]
+        cloud.x += cloud.vx
+        cloud.y += cloud.vy
+        const maxR = 500
+        if (cloud.x > lw + maxR) cloud.x = -maxR
+        if (cloud.x < -maxR) cloud.x = lw + maxR
+        if (cloud.y > lh + maxR) cloud.y = -maxR
+        if (cloud.y < -maxR) cloud.y = lh + maxR
+
+        for (let gi = 0; gi < cloud.gradients.length; gi++) {
+          const g = cloud.gradients[gi]
+          const gx = cloud.x + g.offsetX
+          const gy = cloud.y + g.offsetY
+          const alpha = Math.min(0.08, g.baseAlpha + energy * 0.1) * nebulaMult
+          if (alpha <= 0) continue
+          const hRad = ((globalHue + userHueShift) % 360) * Math.PI / 180
+          const cosH = Math.cos(hRad), sinH = Math.sin(hRad)
+          const nr = Math.max(0, Math.min(255, Math.round(g.r * cosH - g.b * sinH * 0.3 + g.g * sinH * 0.3)))
+          const ng = Math.max(0, Math.min(255, Math.round(g.g * cosH - g.r * sinH * 0.3 + g.b * sinH * 0.3)))
+          const nb = Math.max(0, Math.min(255, Math.round(g.b * cosH - g.g * sinH * 0.3 + g.r * sinH * 0.3)))
+          const gr = g.radius * scl
+          const grad = ctx!.createRadialGradient(gx, gy, 0, gx, gy, gr)
+          grad.addColorStop(0, `rgba(${nr},${ng},${nb},${alpha})`)
+          grad.addColorStop(1, `rgba(${nr},${ng},${nb},0)`)
+          ctx!.fillStyle = grad
+          ctx!.fillRect(gx - gr, gy - gr, gr * 2, gr * 2)
+        }
+      }
+
+      const starScreenX = new Float32Array(activeStars)
+      const starScreenY = new Float32Array(activeStars)
+      const starVisible = new Uint8Array(activeStars)
+
+      for (let i = 0; i < activeStars; i++) {
+        const star = stars[i]
+
+        const prevSX = star.prevScreenX
+        const prevSY = star.prevScreenY
+
+        star.z -= currentSpeed
+
+        if (star.z < 1) {
+          stars[i] = createStar(false, lw, lh)
+          continue
+        }
+
+        const normalX = (star.x - lw / 2) * (FOCAL_LENGTH / star.z) + cx
+        const normalY = (star.y - lh / 2) * (FOCAL_LENGTH / star.z) + cy
+
+        const screenX = normalX
+        const screenY = normalY
+
+        let size = Math.max(0.5, FOCAL_LENGTH / star.z * 2) * scl
+
+        if (warpFlash > 0.01) {
+          size *= 1 + warpFlash * 0.5
+        }
+
+        star.prevScreenX = screenX
+        star.prevScreenY = screenY
+        starScreenX[i] = screenX
+        starScreenY[i] = screenY
+        starVisible[i] = 1
+
+        const depthBrightness = Math.pow(1 - star.z / MAX_DEPTH, 1.5)
+
+        // цвет зависит от скорости
+        const speedFactor = currentSpeed / (BASE_SPEED + MAX_ENERGY_SPEED)
+        const depthFactor = 1 - star.z / MAX_DEPTH
+
+        let r: number, g: number, b: number
+
+        if (star.colorType === StarColor.Bright) {
+          const hRad = star.hue * Math.PI / 180
+          r = Math.max(0, Math.cos(hRad)) * 0.5 + 0.5
+          g = Math.max(0, Math.cos(hRad - 2.094)) * 0.5 + 0.5
+          b = Math.max(0, Math.cos(hRad + 2.094)) * 0.5 + 0.5
+        } else {
+          const t = depthFactor * speedFactor
+          r = star.baseR * (0.667 + t * 0.333)
+          g = star.baseG * (0.8 + t * 0.133)
+          b = star.baseB * (1.0 - t * 0.2)
+        }
+
+        if (beatFlash > 0.01) {
+          r = r + (1 - r) * beatFlash
+          g = g + (1 - g) * beatFlash
+          b = b + (1 - b) * beatFlash
+        }
+
+        star.twinklePhase += star.twinkleSpeed
+        const twinkle = 0.7 + Math.sin(star.twinklePhase) * 0.3
+
+        const bandIdx = Math.min(FREQ_BANDS - 1, Math.floor((screenX / lw) * FREQ_BANDS))
+        const freqBoost = bandIdx >= 0 && bandIdx < FREQ_BANDS ? bandEnergies[bandIdx] * 2 : 0
+
+        const alpha = Math.min(1, (depthBrightness * 1.5 + 0.1) * twinkle + freqBoost)
+
+        const cr = Math.floor(r * 255)
+        const cg = Math.floor(g * 255)
+        const cb = Math.floor(b * 255)
+        const color = `rgba(${cr},${cg},${cb},${alpha})`
+
+        const dx = screenX - prevSX
+        const dy = screenY - prevSY
+        const trailLen = Math.sqrt(dx * dx + dy * dy)
+        const TAIL_DOTS = 5
+
+        if (trailLen > 1.5 && currentSpeed > 0.5) {
+          for (let d = 0; d < TAIL_DOTS; d++) {
+            const t = d / TAIL_DOTS
+            const dotX = prevSX + dx * t
+            const dotY = prevSY + dy * t
+            const dotSize = size * (0.2 + t * 0.6)
+            const dotAlpha = alpha * (0.1 + t * 0.8)
+            ctx!.beginPath()
