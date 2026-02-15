@@ -294,3 +294,78 @@ app.patch('/me/email', requireAuth, (req: AuthedRequest, res) => {
     .get(newEmail, userId)
   if (taken) {
     res.status(409).json({ error: 'email уже занят' })
+    return
+  }
+
+  db.prepare('UPDATE users SET email = ? WHERE id = ?').run(newEmail, userId)
+  const user = userResponse(userId)
+  if (!user) {
+    res.status(404).json({ error: 'пользователь не найден' })
+    return
+  }
+  res.json({ token: issueToken(userId, newEmail), user })
+})
+
+app.patch('/me/password', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const currentPassword = String(req.body?.currentPassword ?? '')
+  const newPassword = String(req.body?.newPassword ?? '')
+
+  if (!currentPassword) {
+    res.status(400).json({ error: 'введите текущий пароль' })
+    return
+  }
+  if (!verifyCurrentPassword(userId, currentPassword)) {
+    res.status(401).json({ error: 'неверный текущий пароль' })
+    return
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: 'новый пароль минимум 8 символов' })
+    return
+  }
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: 'новый пароль должен отличаться от текущего' })
+    return
+  }
+
+  const hash = bcrypt.hashSync(newPassword, 10)
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, userId)
+  res.json({ ok: true })
+})
+
+app.get('/me/avatar', requireAuth, (req: AuthedRequest, res) => {
+  const row = db
+    .prepare('SELECT mime, data FROM user_avatars WHERE user_id = ?')
+    .get(req.userId!) as { mime: string; data: Buffer } | undefined
+  if (!row) {
+    res.status(404).json({ error: 'аватар не задан' })
+    return
+  }
+  res.setHeader('Content-Type', row.mime)
+  res.setHeader('Cache-Control', 'private, max-age=300')
+  res.send(row.data)
+})
+
+app.put('/me/avatar', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const mime = String(req.body?.mime ?? 'image/jpeg')
+  const dataBase64 = String(req.body?.dataBase64 ?? '')
+  if (!dataBase64) {
+    res.status(400).json({ error: 'ожидается dataBase64' })
+    return
+  }
+  if (!AVATAR_MIMES.has(mime)) {
+    res.status(400).json({ error: 'формат: JPEG, PNG, WebP или GIF' })
+    return
+  }
+  const buf = Buffer.from(dataBase64, 'base64')
+  if (buf.length > AVATAR_MAX_BYTES) {
+    res.status(413).json({ error: 'фото больше 2 МБ' })
+    return
+  }
+  const now = Date.now()
+  db.prepare(
+    `INSERT INTO user_avatars (user_id, mime, data, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(userId, mime, buf, now)
+  res.json({ ok: true, updatedAt: now, hasAvatar: true })
