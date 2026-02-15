@@ -474,3 +474,161 @@ export function StarfieldVisualizer() {
             const dotSize = size * (0.2 + t * 0.6)
             const dotAlpha = alpha * (0.1 + t * 0.8)
             ctx!.beginPath()
+            ctx!.arc(dotX, dotY, dotSize, 0, Math.PI * 2)
+            ctx!.fillStyle = `rgba(${cr},${cg},${cb},${dotAlpha})`
+            ctx!.fill()
+          }
+        }
+
+        if (star.z < 200) {
+          ctx!.shadowBlur = size * 4
+          ctx!.shadowColor = `rgb(${cr},${cg},${cb})`
+        }
+
+        ctx!.beginPath()
+        ctx!.arc(screenX, screenY, size, 0, Math.PI * 2)
+        ctx!.fillStyle = color
+        ctx!.fill()
+
+        if (star.z < 200) {
+          ctx!.shadowBlur = 0
+        }
+      }
+
+      const lineAlpha = beatFlash > 0.01 ? 0.08 : 0.025
+      ctx!.strokeStyle = `rgba(180,200,255,${lineAlpha})`
+      ctx!.lineWidth = 0.4
+      ctx!.beginPath()
+      const constMax = 80 * scl
+      const constMaxSq = constMax * constMax
+      for (let i = 0; i < activeStars; i++) {
+        if (!starVisible[i]) continue
+        const sx = starScreenX[i]
+        const sy = starScreenY[i]
+        if (sx < -50 || sx > lw + 50 || sy < -50 || sy > lh + 50) continue
+        let links = 0
+        for (let j = i + 1; j < activeStars; j++) {
+          if (!starVisible[j] || links >= 2) break
+          const dx = starScreenX[j] - sx
+          const dy = starScreenY[j] - sy
+          if (Math.abs(dx) > constMax || Math.abs(dy) > constMax) continue
+          if (dx * dx + dy * dy > constMaxSq) continue
+          ctx!.moveTo(sx, sy)
+          ctx!.lineTo(starScreenX[j], starScreenY[j])
+          links++
+        }
+      }
+      ctx!.stroke()
+
+      if (smokeClouds.length > 0) {
+        ctx!.globalCompositeOperation = 'screen'
+        ctx!.filter = 'blur(8px)'
+
+        for (let si = smokeClouds.length - 1; si >= 0; si--) {
+          const cloud = smokeClouds[si]
+          cloud.age++
+          cloud.opacity *= CLOUD_DECAY
+
+          if (cloud.age > CLOUD_MAX_FRAMES) {
+            smokeClouds.splice(si, 1)
+            continue
+          }
+
+          for (let li = 0; li < cloud.layers.length; li++) {
+            const layer = cloud.layers[li]
+            layer.ox += layer.vx * 0.3
+            layer.oy += layer.vy * 0.3
+            layer.angle += 0.02
+
+            const layerSize = layer.baseRadius * (0.5 + layer.z / 100 + 0.5) * scl
+            const layerOpacity = cloud.opacity * Math.max(0, 0.5 - Math.abs(layer.z) / 120)
+            if (layerOpacity <= 0) continue
+
+            const px = cloud.x + layer.ox + Math.cos(layer.angle) * 3
+            const py = cloud.y + layer.oy + Math.sin(layer.angle) * 3
+
+            const grad = ctx!.createRadialGradient(px, py, 0, px, py, layerSize)
+            grad.addColorStop(0, `rgba(255,255,255,${layerOpacity})`)
+            grad.addColorStop(1, 'rgba(200,220,255,0)')
+            ctx!.fillStyle = grad
+            ctx!.fillRect(px - layerSize, py - layerSize, layerSize * 2, layerSize * 2)
+          }
+        }
+
+        ctx!.filter = 'none'
+        ctx!.globalCompositeOperation = 'source-over'
+      }
+
+      for (let si = shootingStars.length - 1; si >= 0; si--) {
+        const ss = shootingStars[si]
+        ss.x += ss.vx
+        ss.y += ss.vy
+        ss.life++
+        ss.trail.push({ x: ss.x, y: ss.y })
+        if (ss.trail.length > SHOOTING_STAR_TRAIL_LENGTH) ss.trail.shift()
+
+        if (ss.life > ss.maxLife || ss.x < -50 || ss.x > lw + 50 || ss.y < -50 || ss.y > lh + 50) {
+          shootingStars.splice(si, 1)
+          continue
+        }
+
+        for (let ti = 0; ti < ss.trail.length; ti++) {
+          const t = ti / ss.trail.length
+          const trailAlpha = t * (1 - ss.life / ss.maxLife)
+          const trailSize = (1.5 * t + 0.5) * scl
+          ctx!.beginPath()
+          ctx!.arc(ss.trail[ti].x, ss.trail[ti].y, trailSize, 0, Math.PI * 2)
+          ctx!.fillStyle = `rgba(220,230,255,${trailAlpha})`
+          ctx!.fill()
+        }
+        const headAlpha = 1 - ss.life / ss.maxLife
+        ctx!.beginPath()
+        ctx!.arc(ss.x, ss.y, 2.5 * scl, 0, Math.PI * 2)
+        ctx!.fillStyle = `rgba(255,255,255,${headAlpha})`
+        ctx!.fill()
+        ctx!.shadowBlur = 8 * scl
+        ctx!.shadowColor = `rgba(200,220,255,${headAlpha * 0.6})`
+        ctx!.beginPath()
+        ctx!.arc(ss.x, ss.y, 2 * scl, 0, Math.PI * 2)
+        ctx!.fill()
+        ctx!.shadowBlur = 0
+      }
+
+      const vignetteRadius = Math.max(lw, lh) * 0.75
+      const vigGrad = ctx!.createRadialGradient(lw / 2, lh / 2, vignetteRadius * 0.4, lw / 2, lh / 2, vignetteRadius)
+      vigGrad.addColorStop(0, 'rgba(0,0,0,0)')
+      vigGrad.addColorStop(1, 'rgba(0,0,5,0.8)')
+      ctx!.fillStyle = vigGrad
+      ctx!.fillRect(0, 0, lw, lh)
+
+      rafId = requestAnimationFrame(animate)
+    }
+
+    animate()
+
+    function onResize(): void {
+      lw = window.innerWidth
+      lh = window.innerHeight
+      w = lw * dpr
+      h = lh * dpr
+      canvas!.width = w
+      canvas!.height = h
+      canvas!.style.width = lw + 'px'
+      canvas!.style.height = lh + 'px'
+      ctx!.scale(dpr, dpr)
+    }
+    window.addEventListener('resize', onResize)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={mountRef}
+      style={{ position: 'fixed', inset: 0, zIndex: 0, background: '#000' }}
+    />
+  )
+}
