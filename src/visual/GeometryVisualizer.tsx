@@ -238,3 +238,243 @@ export function GeometryVisualizer() {
       lastFrameTime = now - (elapsed % FRAME_INTERVAL)
 
       const { beat, audioData } = useAudioStore.getState()
+      const W = canvas.width
+      const H = canvas.height
+      const sync = syncRef.current
+      const sizeScale = Math.min(W, H) / 900
+      const pp = paramsRef.current
+
+      if (pp.shapeCount !== activeShapeCount) {
+        activeShapeCount = pp.shapeCount
+        shapesRef.current = createShapes(W, H, activeShapeCount)
+      }
+
+      let energy = 0
+      if (audioData.length > 0) {
+        for (let i = 0; i < audioData.length; i++) energy += Math.abs(audioData[i])
+        energy /= audioData.length
+      }
+      sync.energy += (energy - sync.energy) * 0.15
+
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, W, H)
+
+      sync.time += 1
+
+      sync.globalOffsetX += Math.sin(sync.time * 0.02) * 0.3
+      sync.globalOffsetY += Math.cos(sync.time * 0.015) * 0.15
+
+      if (beat) {
+        sync.globalOffsetX += (Math.random() - 0.5) * 40 * sizeScale
+        sync.globalOffsetY += (Math.random() - 0.5) * 20 * sizeScale
+        sync.beatScale = 1 + (BEAT_SCALE - 1) * pp.beatPunch
+        sync.flashAlpha = FLASH_ALPHA * pp.beatPunch
+        sync.beatFlash = 1.0 * pp.beatPunch
+        sync.beatFlashTimer = 2
+        sync.glitchTimer = 6
+        sync.lineBrightness = 0.18
+        sync.cameraScaleBurst += 0.1 * pp.beatPunch
+      }
+
+      sync.globalOffsetX *= LERP_BACK
+      sync.globalOffsetY *= LERP_BACK
+
+      sync.beatScale = 1 + (sync.beatScale - 1) * SCALE_DECAY
+
+      sync.flashAlpha *= 0.92
+      sync.beatFlash *= 0.75
+      sync.cameraScaleBurst *= 0.92
+      if (sync.beatFlashTimer > 0) sync.beatFlashTimer--
+      if (sync.glitchTimer > 0) sync.glitchTimer--
+      sync.lineBrightness += (0.08 - sync.lineBrightness) * 0.06
+
+      if (audioData.length >= 128) {
+        const sparks = sparksRef.current
+
+        const spawnSpark = (): void => {
+          if (sparks.length >= pp.sparkMax) return
+          const x = Math.random() * W
+          const y = Math.random() * H
+          const maxLife = Math.floor(Math.random() * 21) + 20
+          sparks.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 1.0 * sizeScale,
+            vy: (Math.random() - 0.5) * 1.0 * sizeScale,
+            size: (Math.random() * 1.5 + 1.5) * sizeScale,
+            hue: Math.random() * 360,
+            life: maxLife,
+            maxLife,
+          })
+        }
+
+        // требл [232..929]
+        const freqPerBand = Math.floor(697 / SPARK_BANDS) // ~87 бинов на полосу
+        for (let b = 0; b < SPARK_BANDS; b++) {
+          const freqStart = 232 + b * freqPerBand
+          const freqEnd = Math.min(929, freqStart + freqPerBand - 1)
+          let bandAmp = 0
+          for (let f = freqStart; f <= freqEnd; f++) bandAmp += Math.abs(audioData[f])
+          bandAmp /= (freqEnd - freqStart + 1)
+          if (bandAmp > 0.04) {
+            const count = Math.random() < 0.5 ? 1 : 2
+            for (let k = 0; k < count; k++) spawnSpark()
+          }
+        }
+
+        // искры на бит
+        if (beat) {
+          const beatCount = Math.floor(Math.random() * 3) + 6
+          for (let k = 0; k < beatCount; k++) {
+            spawnSpark()
+          }
+        }
+
+        for (let i = sparks.length - 1; i >= 0; i--) {
+          const sp = sparks[i]
+          sp.x += sp.vx
+          sp.y += sp.vy
+          sp.life *= 0.88
+          if (sp.life < 0.5) sparks.splice(i, 1)
+        }
+      }
+
+      const cx = W / 2
+      const cy = H / 2
+      const cameraX = Math.sin(sync.time * 0.015) * (40 + sync.energy * 60) * sizeScale
+      const cameraY = Math.cos(sync.time * 0.012) * (25 + sync.energy * 40) * sizeScale
+      const cameraScale = 1.0 + Math.sin(sync.time * 0.02) * 0.08 + sync.energy * 0.15 + sync.cameraScaleBurst
+      const cameraRotation = Math.sin(sync.time * 0.01) * 0.02
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(cameraRotation)
+      ctx.scale(cameraScale, cameraScale)
+      ctx.translate(-cx + cameraX, -cy + cameraY)
+
+      const lineOffsetY = sync.globalOffsetY * 0.3
+      const lineOffsetX = sync.globalOffsetX * 0.3
+
+      ctx.shadowBlur = 0
+      ctx.lineWidth = 1
+      ctx.strokeStyle = `rgba(255,255,255,${sync.lineBrightness.toFixed(3)})`
+      const hSpace = LINE_SPACING / Math.max(0.1, pp.gridDensity)
+      for (let y = 0; y < H + hSpace; y += hSpace) {
+        const ly = y + (lineOffsetY % hSpace)
+        ctx.beginPath()
+        ctx.moveTo(0, ly)
+        ctx.lineTo(W, ly)
+        ctx.stroke()
+      }
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+      const vSpace = VLINE_SPACING / Math.max(0.1, pp.gridDensity)
+      for (let x = 0; x < W + vSpace; x += vSpace) {
+        const lx = x + (lineOffsetX % vSpace)
+        ctx.beginPath()
+        ctx.moveTo(lx, 0)
+        ctx.lineTo(lx, H)
+        ctx.stroke()
+      }
+
+      const shapes = shapesRef.current
+      const glow = (sync.glitchTimer > 0 ? 30 : 10 + sync.energy * 40) * pp.glow
+
+      if (sync.glitchTimer > 0) {
+        for (let i = 0; i < shapes.length; i++) {
+          const s = shapes[i]
+          const indX = Math.sin(sync.time * 0.05 + s.individualPhase) * 3 * sizeScale
+          const indY = Math.cos(sync.time * 0.04 + s.individualPhase + 1) * 2 * sizeScale
+          const x = s.baseX + sync.globalOffsetX + indX + 3 * sizeScale
+          const y = s.baseY + sync.globalOffsetY + indY
+          const drawSize = s.size * sync.beatScale * sizeScale
+          drawShape(ctx, s.kind, x, y, drawSize, s.rotation, 0.15, 0, 'rgba(255,255,255,1)')
+          if (s.nested && (s.kind === 'square' || s.kind === 'diamond')) {
+            drawShape(ctx, s.kind, x, y, drawSize * 0.6, s.rotation, 0.1, 0, 'rgba(255,255,255,1)')
+          }
+        }
+      }
+
+      for (let i = 0; i < shapes.length; i++) {
+        const s = shapes[i]
+
+        let freqMult = 1
+        if (audioData.length > s.freqIndex) {
+          freqMult = 1 + Math.abs(audioData[s.freqIndex]) * 8
+        }
+        const drawSize = s.size * sync.beatScale * freqMult * sizeScale
+
+        const indX = Math.sin(sync.time * 0.05 + s.individualPhase) * 3 * sizeScale
+        const indY = Math.cos(sync.time * 0.04 + s.individualPhase + 1) * 2 * sizeScale
+        const x = s.baseX + sync.globalOffsetX + indX
+        const y = s.baseY + sync.globalOffsetY + indY
+
+        s.rotation += s.rotSpeed
+
+        drawShape(ctx, s.kind, x, y, drawSize, s.rotation, 0.9, glow)
+        if (s.nested && (s.kind === 'square' || s.kind === 'diamond')) {
+          drawShape(ctx, s.kind, x, y, drawSize * 0.6, s.rotation, 0.55, glow * 0.6)
+        }
+      }
+
+      ctx.restore()
+
+      for (const spark of sparksRef.current) {
+        const t = spark.life / spark.maxLife
+        const opacity = t * 0.7
+
+        const gradient = ctx.createRadialGradient(spark.x, spark.y, 0, spark.x, spark.y, spark.size * 4)
+        gradient.addColorStop(0, `hsla(${spark.hue}, 100%, 80%, ${opacity * 0.4})`)
+        gradient.addColorStop(1, `hsla(${spark.hue}, 100%, 60%, 0)`)
+        ctx.fillStyle = gradient
+        ctx.fillRect(spark.x - spark.size * 4, spark.y - spark.size * 4, spark.size * 8, spark.size * 8)
+
+        ctx.beginPath()
+        ctx.arc(spark.x, spark.y, spark.size * 1.2, 0, Math.PI * 2)
+        ctx.fillStyle = `hsla(${spark.hue}, 100%, 95%, ${opacity})`
+        ctx.shadowBlur = spark.size * 6 * pp.glow
+        ctx.shadowColor = `hsl(${spark.hue}, 100%, 70%)`
+        ctx.fill()
+        ctx.shadowBlur = 0
+      }
+
+      if (sync.beatFlashTimer > 0) {
+        ctx.shadowBlur = 0
+        ctx.fillStyle = 'rgba(255,255,255,0.2)'
+        ctx.fillRect(0, 0, W, H)
+      }
+      if (sync.beatFlash > 0.005) {
+        const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6)
+        grad.addColorStop(0, `rgba(255,255,255,${(sync.beatFlash * 0.15).toFixed(4)})`)
+        grad.addColorStop(1, 'rgba(255,255,255,0)')
+        ctx.shadowBlur = 0
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, W, H)
+      }
+      if (sync.flashAlpha > 0.001) {
+        ctx.fillStyle = `rgba(255,255,255,${sync.flashAlpha.toFixed(4)})`
+        ctx.fillRect(0, 0, W, H)
+      }
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'block',
+        zIndex: 0,
+      }}
+    />
+  )
+}
