@@ -75,3 +75,65 @@ async function apiFetch<T>(
   }
 
   const text = await res.text()
+  let data: unknown = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = { error: text }
+    }
+  }
+
+  if (!res.ok) {
+    let err = `ошибка ${res.status}`
+    if (data && typeof data === 'object' && 'error' in data) {
+      err = String((data as { error: string }).error)
+    } else if (typeof text === 'string' && text.includes('Cannot PUT')) {
+      err = 'сервер устарел — перезапусти API (npm run server:dev в папке server)'
+    } else if (typeof text === 'string' && text.length < 200 && text.trim()) {
+      err = text.trim()
+    }
+    throw new Error(err)
+  }
+
+  return data as T
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<{ token: string; user: AuthUser }> {
+  return apiFetch('/auth/login', { method: 'POST', body: { email, password } })
+}
+
+export async function register(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<{ token: string; user: AuthUser }> {
+  return apiFetch('/auth/register', {
+    method: 'POST',
+    body: { email, password, displayName: displayName?.trim() || undefined },
+  })
+}
+
+export async function requestPasswordReset(
+  email: string,
+): Promise<{
+  ok: boolean
+  message: string
+  delivery?: 'email' | 'console'
+  devResetCode?: string
+}> {
+  return apiFetch('/auth/forgot-password', {
+    method: 'POST',
+    body: { email: email.trim().toLowerCase() },
+  })
+}
+
+export async function resetPasswordWithToken(
+  email: string,
+  token: string,
+  newPassword: string,
+): Promise<{ ok: boolean; message: string }> {
+  return apiFetch('/auth/reset-password', {
