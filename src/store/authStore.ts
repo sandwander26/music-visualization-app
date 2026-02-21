@@ -109,3 +109,114 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     revokeAvatarUrl(get().avatarObjectUrl)
     persistAuth(null, null)
     set({
+      token: null,
+      user: null,
+      avatarObjectUrl: null,
+      storage: null,
+      cloudAudioTrackIds: [],
+      syncStatus: 'idle',
+      syncMessage: null,
+    })
+  },
+
+  restoreSession: async () => {
+    const stored = readStoredAuth()
+    if (!stored) return
+    set({ token: stored.token, user: stored.user })
+    try {
+      const me = await cloudApi.fetchMe(stored.token)
+      set({ user: me.user, storage: me.storage })
+      await loadAvatarIntoStore(stored.token, Boolean(me.user.hasAvatar))
+      await flushCloudPush(stored.token)
+      await pullCloudSnapshot(stored.token)
+      const meAfter = await cloudApi.fetchMe(stored.token)
+      set({ user: meAfter.user, storage: meAfter.storage })
+      await loadAvatarIntoStore(stored.token, Boolean(meAfter.user.hasAvatar))
+      set({ syncStatus: 'ok', syncMessage: 'синхронизировано' })
+    } catch {
+      revokeAvatarUrl(get().avatarObjectUrl)
+      persistAuth(null, null)
+      set({
+        token: null,
+        user: null,
+        avatarObjectUrl: null,
+        storage: null,
+        syncStatus: 'idle',
+        syncMessage: null,
+      })
+    }
+  },
+
+  refreshMe: async () => {
+    const token = get().token
+    if (!token) return
+    const me = await cloudApi.fetchMe(token)
+    set({ user: me.user, storage: me.storage })
+    await loadAvatarIntoStore(token, Boolean(me.user.hasAvatar))
+  },
+
+  uploadAvatar: async (file) => {
+    const token = get().token
+    if (!token) throw new Error('войди в аккаунт')
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Выбери файл изображения (JPG, PNG, WebP, GIF)')
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      throw new Error('Фото не больше 2 МБ')
+    }
+    const dataBase64 = await cloudApi.fileToBase64(file)
+    await cloudApi.putProfileAvatar(token, file.type, dataBase64)
+    const user = { ...get().user!, hasAvatar: true }
+    set({ user })
+    persistAuth(token, user)
+    revokeAvatarUrl(get().avatarObjectUrl)
+    const url = URL.createObjectURL(file)
+    set({ avatarObjectUrl: url })
+  },
+
+  removeAvatar: async () => {
+    const token = get().token
+    if (!token) throw new Error('войди в аккаунт')
+    await cloudApi.deleteProfileAvatar(token)
+    revokeAvatarUrl(get().avatarObjectUrl)
+    const user = { ...get().user!, hasAvatar: false }
+    set({ user, avatarObjectUrl: null })
+    persistAuth(token, user)
+  },
+
+  updateEmail: async (currentPassword, newEmail) => {
+    const token = get().token
+    if (!token) throw new Error('войди в аккаунт')
+    const res = await cloudApi.updateAccountEmail(token, currentPassword, newEmail)
+    persistAuth(res.token, res.user)
+    set({ token: res.token, user: res.user })
+  },
+
+  updatePassword: async (currentPassword, newPassword) => {
+    const token = get().token
+    if (!token) throw new Error('войди в аккаунт')
+    await cloudApi.updateAccountPassword(token, currentPassword, newPassword)
+  },
+
+  syncNow: async () => {
+    const token = get().token
+    if (!token) return
+    set({ syncStatus: 'syncing', syncMessage: null })
+    try {
+      await flushCloudPush(token)
+      await pullCloudSnapshot(token)
+      const me = await cloudApi.fetchMe(token)
+      set({ user: me.user, storage: me.storage })
+      await loadAvatarIntoStore(token, Boolean(me.user.hasAvatar))
+      set({ syncStatus: 'ok', syncMessage: 'синхронизировано' })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      set({ syncStatus: 'error', syncMessage: msg })
+      throw e
+    }
+  },
+}))
+
+export function isLoggedIn(): boolean {
+  return Boolean(useAuthStore.getState().token)
+}
