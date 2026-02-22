@@ -369,3 +369,92 @@ app.put('/me/avatar', requireAuth, (req: AuthedRequest, res) => {
      ON CONFLICT(user_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`,
   ).run(userId, mime, buf, now)
   res.json({ ok: true, updatedAt: now, hasAvatar: true })
+})
+
+app.delete('/me/avatar', requireAuth, (req: AuthedRequest, res) => {
+  db.prepare('DELETE FROM user_avatars WHERE user_id = ?').run(req.userId!)
+  res.json({ ok: true, hasAvatar: false })
+})
+
+app.get('/sync/snapshot', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+
+  const settingsRow = db
+    .prepare('SELECT json, updated_at FROM user_settings WHERE user_id = ?')
+    .get(userId) as { json: string; updated_at: number } | undefined
+
+  const libraryRows = db
+    .prepare('SELECT track_id, json, updated_at FROM library_items WHERE user_id = ?')
+    .all(userId) as { track_id: string; json: string; updated_at: number }[]
+
+  const lrcRows = db
+    .prepare(
+      'SELECT track_id, lrc_text, catalog_artist, catalog_title, updated_at FROM track_lrc WHERE user_id = ?',
+    )
+    .all(userId) as {
+    track_id: string
+    lrc_text: string
+    catalog_artist: string | null
+    catalog_title: string | null
+    updated_at: number
+  }[]
+
+  const coverRows = db
+    .prepare('SELECT track_id, mime, data, updated_at FROM track_covers WHERE user_id = ?')
+    .all(userId) as { track_id: string; mime: string; data: Buffer; updated_at: number }[]
+
+  const audioRows = db
+    .prepare('SELECT track_id, mime, size_bytes, updated_at FROM track_audio WHERE user_id = ?')
+    .all(userId) as { track_id: string; mime: string; size_bytes: number; updated_at: number }[]
+
+  const presetsRow = db
+    .prepare('SELECT json, updated_at FROM user_presets WHERE user_id = ?')
+    .get(userId) as { json: string; updated_at: number } | undefined
+
+  const userVizRows = db
+    .prepare(
+      'SELECT viz_id, name, moods, source, created_at, updated_at FROM user_viz WHERE user_id = ?',
+    )
+    .all(userId) as {
+    viz_id: string
+    name: string
+    moods: string
+    source: string
+    created_at: string
+    updated_at: number
+  }[]
+
+  res.json({
+    settings: settingsRow
+      ? { json: JSON.parse(settingsRow.json), updatedAt: settingsRow.updated_at }
+      : null,
+    library: libraryRows.map((r) => ({
+      trackId: r.track_id,
+      item: JSON.parse(r.json),
+      updatedAt: r.updated_at,
+    })),
+    lrc: lrcRows.map((r) => ({
+      trackId: r.track_id,
+      lrcText: r.lrc_text,
+      catalogArtist: r.catalog_artist ?? undefined,
+      catalogTitle: r.catalog_title ?? undefined,
+      updatedAt: r.updated_at,
+    })),
+    covers: coverRows.map((r) => ({
+      trackId: r.track_id,
+      mime: r.mime,
+      dataBase64: r.data.toString('base64'),
+      updatedAt: r.updated_at,
+    })),
+    cloudAudio: audioRows.map((r) => ({
+      trackId: r.track_id,
+      mime: r.mime,
+      sizeBytes: r.size_bytes,
+      updatedAt: r.updated_at,
+    })),
+    presets: presetsRow
+      ? { data: JSON.parse(presetsRow.json), updatedAt: presetsRow.updated_at }
+      : null,
+    userViz: userVizRows.map((r) => ({
+      vizId: r.viz_id,
+      name: r.name,
