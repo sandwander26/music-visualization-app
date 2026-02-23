@@ -137,3 +137,64 @@ export async function resetPasswordWithToken(
   newPassword: string,
 ): Promise<{ ok: boolean; message: string }> {
   return apiFetch('/auth/reset-password', {
+    method: 'POST',
+    body: {
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      newPassword,
+    },
+  })
+}
+
+export async function fetchMe(token: string): Promise<{
+  user: AuthUser
+  storage: StorageInfo
+}> {
+  return apiFetch('/me', { token })
+}
+
+export async function updateAccountEmail(
+  token: string,
+  currentPassword: string,
+  newEmail: string,
+): Promise<{ token: string; user: AuthUser }> {
+  return apiFetch('/me/email', {
+    method: 'PATCH',
+    token,
+    body: { currentPassword, newEmail: newEmail.trim().toLowerCase() },
+  })
+}
+
+export async function updateAccountPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch('/me/password', {
+    method: 'PATCH',
+    token,
+    body: { currentPassword, newPassword },
+  })
+}
+
+export async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+export async function fetchProfileAvatarObjectUrl(token: string): Promise<string | null> {
+  let res: Response
+  try {
+    res = await fetch(`${getApiBaseUrl()}/me/avatar`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+  } catch {
+    throw new Error('не удалось загрузить фото профиля')
+  }
