@@ -173,3 +173,120 @@ export function ParticlesVisualizer() {
           if (connCount[i] >= MAX_CONNECTIONS) break
           if (connCount[j] >= MAX_CONNECTIONS) continue
           const dx = a.x - ps[j].x
+          const dy = a.y - ps[j].y
+          const distSq = dx * dx + dy * dy
+          if (distSq < connectionDistSq) {
+            const dist = Math.sqrt(distSq)
+            const lineAlpha = (1 - dist / connectionDist) * 0.35
+            ctx.beginPath()
+            ctx.moveTo(a.x, a.y)
+            ctx.lineTo(ps[j].x, ps[j].y)
+            ctx.strokeStyle = isFlash
+              ? `rgba(255,255,255,${lineAlpha})`
+              : `rgba(140,90,255,${lineAlpha})`
+            ctx.lineWidth = 0.5
+            ctx.globalAlpha = 1
+            ctx.stroke()
+            connCount[i]++
+            connCount[j]++
+          }
+        }
+      }
+
+      for (let i = ps.length - 1; i >= 0; i--) {
+        const p = ps[i]
+
+        const orbitAngle = (0.005 + energy * 0.5) * p.orbitDir
+        const cosA = Math.cos(orbitAngle)
+        const sinA = Math.sin(orbitAngle)
+        const rotVx = p.vx * cosA - p.vy * sinA
+        const rotVy = p.vx * sinA + p.vy * cosA
+        p.vx = rotVx
+        p.vy = rotVy
+
+        if (trailLenParam > 0) {
+          p.trail.push({ x: p.x, y: p.y })
+          while (p.trail.length > trailLenParam) p.trail.shift()
+        } else if (p.trail.length > 0) {
+          p.trail.length = 0
+        }
+
+        const speedMul = (energy * 50 + 1) * speedMultParam
+        p.x += p.vx * speedMul
+        p.y += p.vy * speedMul
+        p.vx *= 0.97
+        p.vy *= 0.97
+
+        p.hue = (p.hue + 0.5) % 360
+
+        p.life -= p.lifeSpeed
+        if (p.life <= 0) {
+          ps[i] = spawnParticle(W, H)
+          continue
+        }
+
+        const binIndex = Math.min(
+          Math.max(0, Math.floor((p.x / W) * audioData.length)),
+          audioData.length - 1,
+        )
+        const freqVal = audioData[binIndex] ?? 0
+        const radius = Math.max(0.5,
+          (p.size * (energy * 20 + 1) * pulseSizeRef.current + freqVal * 4) * sizeScale,
+        )
+
+        const alpha = p.opacity * p.life
+        const renderHue = (p.hue + hueShiftParam) % 360
+        const color = isFlash ? '255,255,255' : hslToRgbString(renderHue, 75, 62)
+
+        for (let t = 0; t < p.trail.length; t++) {
+          const ratio = (t + 1) / p.trail.length
+          const trailAlpha = alpha * ratio * 0.35
+          const trailRadius = Math.max(0.3, radius * ratio * 0.55)
+          ctx.beginPath()
+          ctx.arc(p.trail[t].x, p.trail[t].y, trailRadius, 0, Math.PI * 2)
+          ctx.fillStyle = `rgb(${color})`
+          ctx.globalAlpha = trailAlpha
+          ctx.fill()
+        }
+
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2)
+        ctx.fillStyle = `rgb(${color})`
+        ctx.globalAlpha = alpha
+        ctx.fill()
+      }
+
+      ctx.globalAlpha = 1
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'block',
+        zIndex: 0,
+        background: '#000000',
+      }}
+    />
+  )
+}
+
+function hslToRgbString(h: number, s: number, l: number): string {
+  const sn = s / 100
+  const ln = l / 100
+  const k = (n: number) => (n + h / 30) % 12
+  const a = sn * Math.min(ln, 1 - ln)
+  const f = (n: number) => ln - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  return `${Math.round(f(0) * 255)},${Math.round(f(8) * 255)},${Math.round(f(4) * 255)}`
+}
