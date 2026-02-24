@@ -458,3 +458,98 @@ app.get('/sync/snapshot', requireAuth, (req: AuthedRequest, res) => {
     userViz: userVizRows.map((r) => ({
       vizId: r.viz_id,
       name: r.name,
+      moods: JSON.parse(r.moods) as string[],
+      source: r.source,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })),
+    serverTime: Date.now(),
+  })
+})
+
+app.put('/sync/presets', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const data = req.body?.data
+  if (!data || typeof data !== 'object') {
+    res.status(400).json({ error: 'ожидается data object' })
+    return
+  }
+  const now = Date.now()
+  db.prepare(
+    `INSERT INTO user_presets (user_id, json, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`,
+  ).run(userId, JSON.stringify(data), now)
+  res.json({ ok: true, updatedAt: now })
+})
+
+app.put('/sync/user-viz', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const items = req.body?.items
+  if (!Array.isArray(items)) {
+    res.status(400).json({ error: 'ожидается items[]' })
+    return
+  }
+
+  const upsert = db.prepare(
+    `INSERT INTO user_viz (user_id, viz_id, name, moods, source, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, viz_id) DO UPDATE SET
+       name = excluded.name,
+       moods = excluded.moods,
+       source = excluded.source,
+       created_at = excluded.created_at,
+       updated_at = excluded.updated_at`,
+  )
+  const del = db.prepare('DELETE FROM user_viz WHERE user_id = ? AND viz_id = ?')
+  const now = Date.now()
+
+  const tx = db.transaction(() => {
+    const seen = new Set<string>()
+    for (const raw of items) {
+      const vizId = String(raw?.vizId ?? raw?.id ?? '').trim()
+      const name = String(raw?.name ?? 'Без названия').trim()
+      const source = String(raw?.source ?? '')
+      const moods = Array.isArray(raw?.moods) ? raw.moods.map(String) : []
+      const createdAt =
+        typeof raw?.createdAt === 'string' ? raw.createdAt : new Date(now).toISOString()
+      if (!vizId || !vizId.startsWith('user-') || !source.trim()) continue
+      if (Buffer.byteLength(source, 'utf8') > USER_VIZ_MAX_BYTES) {
+        throw new Error(`визуализатор ${vizId} больше лимита`)
+      }
+      seen.add(vizId)
+      upsert.run(userId, vizId, name, JSON.stringify(moods), source, createdAt, now)
+    }
+    if (seen.size > USER_VIZ_MAX_ITEMS) {
+      throw new Error(`не больше ${USER_VIZ_MAX_ITEMS} визуализаторов`)
+    }
+    const existing = db
+      .prepare('SELECT viz_id FROM user_viz WHERE user_id = ?')
+      .all(userId) as { viz_id: string }[]
+    for (const row of existing) {
+      if (!seen.has(row.viz_id)) del.run(userId, row.viz_id)
+    }
+  })
+
+  try {
+    tx()
+    res.json({ ok: true, count: items.length, updatedAt: now })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(400).json({ error: msg })
+  }
+})
+
+app.put('/sync/settings', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const json = req.body?.settings
+  if (!json || typeof json !== 'object') {
+    res.status(400).json({ error: 'ожидается settings object' })
+    return
+  }
+  const now = Date.now()
+  db.prepare(
+    `INSERT INTO user_settings (user_id, json, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`,
+  ).run(userId, JSON.stringify(json), now)
+  res.json({ ok: true, updatedAt: now })
+})
