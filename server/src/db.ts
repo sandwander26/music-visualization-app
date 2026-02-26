@@ -36,3 +36,41 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS track_lrc (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id TEXT NOT NULL,
+    lrc_text TEXT NOT NULL,
+    catalog_artist TEXT,
+    catalog_title TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS track_covers (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    data BLOB NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS track_audio (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_avatars (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    mime TEXT NOT NULL,
+    data BLOB NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS user_presets (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
