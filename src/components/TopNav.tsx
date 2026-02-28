@@ -101,3 +101,106 @@ export default function TopNav() {
             )
           })}
         </nav>
+
+        <div className="ml-auto flex items-center gap-2">
+          {SEARCH_PLACEHOLDERS[currentTab] ? (
+            <div
+              className="flex items-center"
+              style={{
+                width: 240,
+                height: 32,
+                background: 'var(--bg-soft)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '0 12px 0 10px',
+                gap: 8,
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border-active)'
+                e.currentTarget.style.background = 'var(--bg-elev)'
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.background = 'var(--bg-soft)'
+              }}
+            >
+              <Search size={14} style={{ color: 'var(--fg-mute)', flexShrink: 0 }} />
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={SEARCH_PLACEHOLDERS[currentTab]}
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: 'var(--fg)',
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                }}
+              />
+              <kbd
+                style={{
+                  marginLeft: 'auto',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10,
+                  color: 'var(--fg-mute)',
+                  padding: '2px 5px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  lineHeight: 1,
+                }}
+              >
+                ⌘K
+              </kbd>
+            </div>
+          ) : null}
+
+          <IconButton onClick={cycleMode} title={`Тема: ${mode}`}>
+            <ThemeIcon size={14} />
+          </IconButton>
+          <IconButton onClick={() => setProfileOpen(true)} title="Профиль и синхронизация">
+            <User size={14} />
+          </IconButton>
+          <IconButton onClick={() => setSettingsOpen(true)} title="Настройки">
+            <Settings size={14} />
+          </IconButton>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+interface IconButtonProps {
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+}
+
+function IconButton({ onClick, title, children }: IconButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="hov-icon-btn t-color-border"
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-soft)',
+        color: 'var(--fg-mute)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
