@@ -553,3 +553,78 @@ app.put('/sync/settings', requireAuth, (req: AuthedRequest, res) => {
   ).run(userId, JSON.stringify(json), now)
   res.json({ ok: true, updatedAt: now })
 })
+
+app.put('/sync/library', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const items = req.body?.items
+  if (!Array.isArray(items)) {
+    res.status(400).json({ error: 'ожидается items[]' })
+    return
+  }
+
+  const upsert = db.prepare(
+    `INSERT INTO library_items (user_id, track_id, json, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id, track_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`,
+  )
+  const del = db.prepare('DELETE FROM library_items WHERE user_id = ? AND track_id = ?')
+  const now = Date.now()
+
+  const delLrc = db.prepare('DELETE FROM track_lrc WHERE user_id = ? AND track_id = ?')
+  const delCover = db.prepare('DELETE FROM track_covers WHERE user_id = ? AND track_id = ?')
+  const delAudio = db.prepare('DELETE FROM track_audio WHERE user_id = ? AND track_id = ?')
+
+  const tx = db.transaction(() => {
+    const seen = new Set<string>()
+    for (const raw of items) {
+      const trackId = String(raw?.trackId ?? raw?.id ?? '').trim()
+      const item = raw?.item ?? raw
+      if (!trackId || !item || typeof item !== 'object') continue
+      seen.add(trackId)
+      upsert.run(userId, trackId, JSON.stringify(item), now)
+    }
+    const existing = db
+      .prepare('SELECT track_id FROM library_items WHERE user_id = ?')
+      .all(userId) as { track_id: string }[]
+    for (const row of existing) {
+      if (!seen.has(row.track_id)) {
+        del.run(userId, row.track_id)
+        delLrc.run(userId, row.track_id)
+        delCover.run(userId, row.track_id)
+        delAudio.run(userId, row.track_id)
+      }
+    }
+  })
+  tx()
+  purgeOrphanTrackAttachments(userId)
+
+  res.json({
+    ok: true,
+    count: items.length,
+    updatedAt: now,
+    storage: {
+      audioBytesUsed: audioBytesUsed(userId),
+      audioQuotaBytes: AUDIO_QUOTA_BYTES,
+    },
+  })
+})
+
+app.put('/sync/tracks/:trackId/lrc', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const trackId = String(req.params.trackId ?? '').trim()
+  const lrcText = String(req.body?.lrcText ?? '')
+  if (!trackId || !lrcText.trim()) {
+    res.status(400).json({ error: 'trackId и lrcText обязательны' })
+    return
+  }
+  const now = Date.now()
+  const catalogArtist = req.body?.catalogArtist ? String(req.body.catalogArtist) : null
+  const catalogTitle = req.body?.catalogTitle ? String(req.body.catalogTitle) : null
+
+  db.prepare(
+    `INSERT INTO track_lrc (user_id, track_id, lrc_text, catalog_artist, catalog_title, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, track_id) DO UPDATE SET
+       lrc_text = excluded.lrc_text,
+       catalog_artist = excluded.catalog_artist,
+       catalog_title = excluded.catalog_title,
+       updated_at = excluded.updated_at`,
