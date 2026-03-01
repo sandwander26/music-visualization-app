@@ -628,3 +628,114 @@ app.put('/sync/tracks/:trackId/lrc', requireAuth, (req: AuthedRequest, res) => {
        catalog_artist = excluded.catalog_artist,
        catalog_title = excluded.catalog_title,
        updated_at = excluded.updated_at`,
+  ).run(userId, trackId, lrcText, catalogArtist, catalogTitle, now)
+
+  res.json({ ok: true, updatedAt: now })
+})
+
+app.delete('/sync/tracks/:trackId/lrc', requireAuth, (req: AuthedRequest, res) => {
+  db.prepare('DELETE FROM track_lrc WHERE user_id = ? AND track_id = ?').run(
+    req.userId!,
+    req.params.trackId,
+  )
+  res.json({ ok: true })
+})
+
+app.put('/sync/tracks/:trackId/cover', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const trackId = String(req.params.trackId ?? '').trim()
+  const mime = String(req.body?.mime ?? 'image/jpeg')
+  const dataBase64 = String(req.body?.dataBase64 ?? '')
+  if (!trackId || !dataBase64) {
+    res.status(400).json({ error: 'trackId и dataBase64 обязательны' })
+    return
+  }
+  const buf = Buffer.from(dataBase64, 'base64')
+  if (buf.length > 3 * 1024 * 1024) {
+    res.status(413).json({ error: 'обложка больше 3 МБ' })
+    return
+  }
+  const now = Date.now()
+  db.prepare(
+    `INSERT INTO track_covers (user_id, track_id, mime, data, updated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, track_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(userId, trackId, mime, buf, now)
+  res.json({ ok: true, updatedAt: now })
+})
+
+app.put('/sync/tracks/:trackId/audio', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const trackId = String(req.params.trackId ?? '').trim()
+  const mime = String(req.body?.mime ?? 'audio/mpeg')
+  const dataBase64 = String(req.body?.dataBase64 ?? '')
+  if (!trackId || !dataBase64) {
+    res.status(400).json({ error: 'trackId и dataBase64 обязательны' })
+    return
+  }
+  const buf = Buffer.from(dataBase64, 'base64')
+  const sizeBytes = buf.length
+
+  const prev = db
+    .prepare('SELECT size_bytes FROM track_audio WHERE user_id = ? AND track_id = ?')
+    .get(userId, trackId) as { size_bytes: number } | undefined
+  const used = audioBytesUsed(userId)
+  const usedWithout = used - (prev?.size_bytes ?? 0)
+  if (usedWithout + sizeBytes > AUDIO_QUOTA_BYTES) {
+    res.status(413).json({
+      error: 'превышен лимит облачного аудио (500 МБ)',
+      audioBytesUsed: usedWithout,
+      audioQuotaBytes: AUDIO_QUOTA_BYTES,
+    })
+    return
+  }
+
+  const now = Date.now()
+  db.prepare(
+    `INSERT INTO track_audio (user_id, track_id, mime, size_bytes, data, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, track_id) DO UPDATE SET mime = excluded.mime, size_bytes = excluded.size_bytes, data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(userId, trackId, mime, sizeBytes, buf, now)
+
+  res.json({
+    ok: true,
+    updatedAt: now,
+    storage: {
+      audioBytesUsed: usedWithout + sizeBytes,
+      audioQuotaBytes: AUDIO_QUOTA_BYTES,
+    },
+  })
+})
+
+app.get('/sync/tracks/:trackId/audio', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.userId!
+  const trackId = String(req.params.trackId ?? '').trim()
+  const row = db
+    .prepare('SELECT mime, size_bytes, data FROM track_audio WHERE user_id = ? AND track_id = ?')
+    .get(userId, trackId) as { mime: string; size_bytes: number; data: Buffer } | undefined
+  if (!row) {
+    res.status(404).json({ error: 'аудио в облаке не найдено' })
+    return
+  }
+  res.json({
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    dataBase64: row.data.toString('base64'),
+  })
+})
+
+app.delete('/sync/tracks/:trackId/audio', requireAuth, (req: AuthedRequest, res) => {
+  db.prepare('DELETE FROM track_audio WHERE user_id = ? AND track_id = ?').run(
+    req.userId!,
+    req.params.trackId,
+  )
+  res.json({ ok: true })
+})
+
+app.listen(PORT, () => {
+  console.log(`[loomi-api] http://127.0.0.1:${PORT}`)
+  if (!isSmtpConfigured()) {
+    console.log(
+      '[loomi-api] почта: SMTP не настроен — коды сброса только в этой консоли (см. docs/email-setup.md)',
+    )
+  }
+  void verifySmtpOnStartup()
+})

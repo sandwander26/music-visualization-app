@@ -74,3 +74,53 @@ db.exec(`
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     json TEXT NOT NULL,
     updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS user_viz (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    viz_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    moods TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, viz_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+`)
+
+export function userHasAvatar(userId: string): boolean {
+  const row = db
+    .prepare('SELECT 1 AS ok FROM user_avatars WHERE user_id = ?')
+    .get(userId) as { ok: number } | undefined
+  return Boolean(row)
+}
+
+export function audioBytesUsed(userId: string): number {
+  const row = db
+    .prepare('SELECT COALESCE(SUM(size_bytes), 0) AS n FROM track_audio WHERE user_id = ?')
+    .get(userId) as { n: number }
+  return row.n
+}
+
+export function purgeOrphanTrackAttachments(userId: string): void {
+  const sub = 'SELECT track_id FROM library_items WHERE user_id = ?'
+  db.prepare(
+    `DELETE FROM track_lrc WHERE user_id = ? AND track_id NOT IN (${sub})`,
+  ).run(userId, userId)
+  db.prepare(
+    `DELETE FROM track_covers WHERE user_id = ? AND track_id NOT IN (${sub})`,
+  ).run(userId, userId)
+  db.prepare(
+    `DELETE FROM track_audio WHERE user_id = ? AND track_id NOT IN (${sub})`,
+  ).run(userId, userId)
+}
