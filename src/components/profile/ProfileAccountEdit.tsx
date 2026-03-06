@@ -157,3 +157,108 @@ export default function ProfileAccountEdit({ onBack }: ProfileAccountEditProps) 
           </div>
         </div>
         <button
+          type="submit"
+          className="btn btn--ghost"
+          style={{ width: '100%' }}
+          disabled={emailBusy}
+        >
+          {emailBusy ? 'Сохранение…' : 'Сохранить email'}
+        </button>
+        {emailOk ? (
+          <div className="auth-modal__hint" style={{ marginTop: 8, color: 'var(--premium)' }}>
+            {emailOk}
+          </div>
+        ) : null}
+        {emailError ? (
+          <div className="auth-modal__hint auth-modal__hint--error" style={{ marginTop: 8 }}>
+            {emailError}
+          </div>
+        ) : null}
+      </form>
+
+      <form onSubmit={submitPassword} noValidate>
+        <p className="auth-modal__label" style={{ marginBottom: 8 }}>
+          Сменить пароль
+        </p>
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-edit-pass-new">
+            Новый пароль
+          </label>
+          <div className="auth-modal__input-shell">
+            <input
+              id="profile-edit-pass-new"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value)
+                setPassError(null)
+                setPassOk(null)
+              }}
+              placeholder="Минимум 8 символов"
+            />
+          </div>
+        </div>
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-edit-pass-new2">
+            Повторите пароль
+          </label>
+          <div className="auth-modal__input-shell">
+            <input
+              id="profile-edit-pass-new2"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword2}
+              onChange={(e) => {
+                setNewPassword2(e.target.value)
+                setPassError(null)
+                setPassOk(null)
+              }}
+              placeholder="Повторите пароль"
+            />
+          </div>
+        </div>
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-edit-pass-current">
+            Текущий пароль
+          </label>
+          <div className="auth-modal__input-shell">
+            <input
+              id="profile-edit-pass-current"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="current-password"
+              value={passPassword}
+              onChange={(e) => {
+                setPassPassword(e.target.value)
+                setPassError(null)
+                setPassOk(null)
+              }}
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          className="btn btn--ghost"
+          style={{ width: '100%' }}
+          disabled={passBusy}
+        >
+          {passBusy ? 'Сохранение…' : 'Сменить пароль'}
+        </button>
+        {passOk ? (
+          <div className="auth-modal__hint" style={{ marginTop: 8, color: 'var(--premium)' }}>
+            {passOk}
+          </div>
+        ) : null}
+        {passError ? (
+          <div className="auth-modal__hint auth-modal__hint--error" style={{ marginTop: 8 }}>
+            {passError}
+          </div>
+        ) : null}
+      </form>
+    </>
+  )
+}
