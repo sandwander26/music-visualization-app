@@ -104,3 +104,50 @@ export default function VisualizerCard({ viz, isActive, index, onClick }: Visual
             {viz.name}
           </div>
         </div>
+
+        <motion.div
+          animate={{ opacity: hovered ? 1 : 0, scale: hovered ? 1 : 0.85 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'var(--fg)',
+            color: 'var(--bg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <ArrowUpRight size={16} strokeWidth={2.2} />
+        </motion.div>
+      </div>
+    </motion.button>
+  )
+}
+
+function Badge() {
+  return (
+    <div
+      className="absolute"
+      style={{
+        top: 14,
+        right: 14,
+        padding: '4px 8px',
+        borderRadius: 6,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 9,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+        fontWeight: 500,
+        background: 'var(--premium-bg)',
+        border: '1px solid var(--premium-border)',
+        color: 'var(--premium)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      премиум
+    </div>
+  )
+}
