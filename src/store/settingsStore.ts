@@ -53,3 +53,58 @@ function persistSettings(state: AppSettings) {
 
 function pickAppSettings(s: SettingsStore): AppSettings {
   return {
+    libraryView: s.libraryView,
+    karaokeOnLyricsLoaded: s.karaokeOnLyricsLoaded,
+    autoSearchLyrics: s.autoSearchLyrics,
+    defaultVolume: s.defaultVolume,
+  }
+}
+
+interface SettingsStore extends AppSettings {
+  setLibraryView: (v: LibraryView) => void
+  setKaraokeOnLyricsLoaded: (v: boolean) => void
+  setAutoSearchLyrics: (v: boolean) => void
+  setDefaultVolume: (v: number) => void
+}
+
+const initial = readStoredSettings()
+
+export const useSettingsStore = create<SettingsStore>((set, get) => ({
+  ...initial,
+
+  setLibraryView: (v) => {
+    set({ libraryView: v })
+    persistSettings({ ...pickAppSettings(get()), libraryView: v })
+    useUIStore.getState().setLibraryView(v)
+  },
+
+  setKaraokeOnLyricsLoaded: (v) => {
+    set({ karaokeOnLyricsLoaded: v })
+    persistSettings({ ...pickAppSettings(get()), karaokeOnLyricsLoaded: v })
+    if (v) maybeEnableKaraokeOverlay()
+  },
+
+  setAutoSearchLyrics: (v) => {
+    set({ autoSearchLyrics: v })
+    persistSettings({ ...pickAppSettings(get()), autoSearchLyrics: v })
+  },
+
+  setDefaultVolume: (v) => {
+    const vol = clampVolume(v)
+    set({ defaultVolume: vol })
+    persistSettings({ ...pickAppSettings(get()), defaultVolume: vol })
+    audioEngine.setVolume(vol)
+  },
+}))
+
+export function maybeEnableKaraokeOverlay(): void {
+  if (!useSettingsStore.getState().karaokeOnLyricsLoaded) return
+  if (useAudioStore.getState().lrcLines.length === 0) return
+  useUIStore.getState().setKaraokeOverlay(true)
+}
+
+export function applyStoredSettingsOnStartup(): void {
+  const s = useSettingsStore.getState()
+  useUIStore.getState().setLibraryView(s.libraryView)
+  audioEngine.setVolume(s.defaultVolume)
+}
