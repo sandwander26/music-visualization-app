@@ -208,3 +208,142 @@ function GridSection<T extends { id: string }>({ items, renderCard, marginBottom
     >
       <AnimatePresence mode="popLayout">
         {items.map((item, i) => (
+          <motion.div key={item.id} layout exit={{ opacity: 0, scale: 0.92 }} transition={{ duration: 0.3 }}>
+            {renderCard(item, i)}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+interface UserGalleryCardProps {
+  runtime: UserVisualizerRuntime
+  isActive: boolean
+  index: number
+  onClick: () => void
+}
+
+function UserGalleryCard({ runtime, isActive, index, onClick }: UserGalleryCardProps) {
+  const [hovered, setHovered] = useState(false)
+  const broken = runtime.error !== null
+  const canLivePreview = !broken && runtime.component !== null
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -4 }}
+      whileTap={{ y: -2 }}
+      className="relative aspect-[4/3] w-full overflow-hidden rounded-[14px] text-left"
+      style={{
+        background: broken
+          ? 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(0,0,0,0.5))'
+          : 'var(--bg-soft)',
+        border: `1px solid ${isActive || hovered ? 'var(--border-active)' : 'var(--border)'}`,
+        boxShadow: isActive
+          ? '0 0 0 1px var(--border-active) inset, 0 18px 40px rgba(0,0,0,0.45)'
+          : hovered
+            ? '0 18px 40px rgba(0,0,0,0.45)'
+            : '0 1px 2px rgba(0,0,0,0.2)',
+        transition: 'box-shadow 0.25s, border-color 0.2s',
+        cursor: 'pointer',
+        padding: 0,
+        outline: 'none',
+      }}
+    >
+      <motion.div
+        className="absolute inset-0"
+        animate={{
+          scale: hovered && canLivePreview ? 1.05 : 1,
+          opacity: hovered && canLivePreview ? 0 : 1,
+        }}
+        transition={{
+          scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+          opacity: { duration: 0.15 },
+        }}
+      >
+        <PreviewImage vizId={runtime.id} name={runtime.name} />
+      </motion.div>
+
+      <AnimatePresence>
+        {hovered && canLivePreview ? (
+          <motion.div
+            key="live"
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <VisualizerHost vizId={runtime.id} />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'var(--card-overlay)' }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          top: 14,
+          right: 14,
+          padding: '4px 8px',
+          borderRadius: 6,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          fontWeight: 500,
+          background: 'var(--bg-elev)',
+          border: '1px solid var(--border-strong)',
+          color: 'var(--fg)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        Свой
+      </div>
+
+      <div
+        className="absolute inset-x-0 bottom-0"
+        style={{ padding: 18 }}
+      >
+        <div
+          className="flex items-center gap-1.5"
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: 'var(--fg-mute)',
+            marginBottom: 6,
+          }}
+        >
+          <span>{broken ? 'ошибка' : 'свой'}</span>
+          <span className="inline-block w-1 h-1 rounded-full bg-current opacity-60" />
+          <span>{runtime.moods.map((m) => MOOD_LABELS[m]).join(', ') || '—'}</span>
+        </div>
+        <div
+          className="truncate"
+          style={{
+            fontSize: 17,
+            fontWeight: 600,
+            color: 'var(--fg)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {runtime.name}
+        </div>
+      </div>
+    </motion.button>
+  )
+}
+
