@@ -118,3 +118,124 @@ export function ShaderSphereVisualizer() {
   audioDataRef.current = audioData
   isPlayingRef.current = isPlaying
   titleRef.current = title
+  artistRef.current = artist
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color(0x02030a)
+    scene.fog = new THREE.FogExp2(0x04061a, 0.05)
+
+    const camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100,
+    )
+    camera.position.set(0, 0, 5.5)
+    camera.lookAt(0, 0, 0)
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    const deviceCap = window.devicePixelRatio || 1
+    const resolveDpr = (scale: number) => Math.min(Math.max(0.5, scale), 2, deviceCap)
+    let dpr = resolveDpr(paramsRef.current.resolutionScale)
+    renderer.setPixelRatio(dpr)
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 0.7
+    container.appendChild(renderer.domElement)
+
+    let currentSubdivisions = paramsRef.current.subdivisions
+    let geometry = new THREE.IcosahedronGeometry(1, currentSubdivisions)
+    const material = new THREE.ShaderMaterial({
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+      uniforms: {
+        uTime: { value: 0 },
+        uEnergy: { value: 0 },
+        uBeat: { value: 0 },
+        uBass: { value: 0 },
+        uHigh: { value: 0 },
+        uPointScale: { value: 1.0 },
+        uDisplace: { value: 1.0 },
+      },
+      transparent: true,
+      depthWrite: false,
+    })
+    const points = new THREE.Points(geometry, material)
+    scene.add(points)
+
+    let starGeo = new THREE.BufferGeometry()
+    let currentStarCount = paramsRef.current.starCount
+    starGeo.setAttribute('position', new THREE.BufferAttribute(buildStarPositions(currentStarCount), 3))
+    const starMat = new THREE.PointsMaterial({
+      color: 0x8899ff,
+      size: 0.05,
+      transparent: true,
+      opacity: 0.6,
+      sizeAttenuation: true,
+    })
+    const stars = new THREE.Points(starGeo, starMat)
+    scene.add(stars)
+
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const afterimagePass = new AfterimagePass(paramsRef.current.trailAmount)
+    composer.addPass(afterimagePass)
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.35,
+        0.4,
+        0.55,
+    )
+    composer.addPass(bloomPass)
+
+    const shake = { x: 0, y: 0, vx: 0, vy: 0, rot: 0, vr: 0, trauma: 0 }
+    const drift = { x: 0, y: 0, rot: 0 }
+    let kickX = 0
+    let kickY = 0
+    let beatScale = 1.0
+    let prevBeat = false
+    let beatIntensity = 0
+    let trackOpacity = 0
+    let lastTitle = ''
+    let frozenTime = 0
+
+    const clock = new THREE.Clock()
+    const baseCamPos = new THREE.Vector3(0, 0, 5.5)
+
+    const FRAME_INTERVAL = 1000 / 60
+    let lastFrameTime = 0
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      composer.setSize(window.innerWidth, window.innerHeight)
+      bloomPass.setSize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('resize', onResize)
+
+    function animate() {
+      const now = performance.now()
+      const sinceLast = now - lastFrameTime
+      if (sinceLast < FRAME_INTERVAL) {
+        rafRef.current = requestAnimationFrame(animate)
+        return
+      }
+      lastFrameTime = now - (sinceLast % FRAME_INTERVAL)
+
+      const elapsed = clock.getElapsedTime()
+      const curBeat = beatRef.current
+      const curEnergy = energyRef.current
+      const curAudioData = audioDataRef.current
+      const pp = paramsRef.current
+
+      if (pp.subdivisions !== currentSubdivisions) {
+        currentSubdivisions = pp.subdivisions
+        const oldGeom = geometry
+        geometry = new THREE.IcosahedronGeometry(1, currentSubdivisions)
+        points.geometry = geometry
+        oldGeom.dispose()
