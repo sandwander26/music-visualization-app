@@ -143,3 +143,148 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 border: '1px solid var(--border)',
                 overflow: 'hidden',
               }}
+            >
+              {HOTKEYS.map((row, i) => (
+                <div
+                  key={row.keys}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '8px 12px',
+                    borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+                    background: i % 2 === 0 ? 'var(--bg-soft)' : 'transparent',
+                  }}
+                >
+                  <kbd
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg)',
+                      color: 'var(--fg)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {row.keys}
+                  </kbd>
+                  <span style={{ ...ITEM_LABEL_STYLE, textAlign: 'right' }}>{row.action}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--fg-mute)', lineHeight: 1.4 }}>
+              Горячие клавиши работают в открытом плеере визуализатора.
+            </p>
+          </Section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section
+      style={{
+        padding: '14px 16px',
+        borderRadius: 12,
+        border: '1px solid var(--border-strong)',
+        background: 'var(--bg-soft)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 14,
+          paddingBottom: 10,
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 4,
+            height: 18,
+            borderRadius: 2,
+            background: 'var(--premium)',
+            flexShrink: 0,
+          }}
+        />
+        <h3 style={SECTION_TITLE_STYLE}>{title}</h3>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
+    </section>
+  )
+}
+
+function ToggleRow({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>{label}</div>
+        {hint ? (
+          <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.4, color: 'var(--fg-mute)' }}>
+            {hint}
+          </div>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        style={{
+          flexShrink: 0,
+          width: 40,
+          height: 22,
+          borderRadius: 11,
+          border: '1px solid var(--border)',
+          background: checked ? 'var(--premium-bg)' : 'var(--bg-soft)',
+          position: 'relative',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          transition: 'background 0.15s',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: 2,
+            left: checked ? 20 : 2,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: checked ? 'var(--premium)' : 'var(--fg-mute)',
+            transition: 'left 0.15s',
+          }}
+        />
+      </button>
+    </div>
+  )
+}
+
