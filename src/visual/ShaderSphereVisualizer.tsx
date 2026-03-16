@@ -239,3 +239,103 @@ export function ShaderSphereVisualizer() {
         geometry = new THREE.IcosahedronGeometry(1, currentSubdivisions)
         points.geometry = geometry
         oldGeom.dispose()
+      }
+
+      if (pp.starCount !== currentStarCount) {
+        currentStarCount = pp.starCount
+        const oldStarGeo = starGeo
+        starGeo = new THREE.BufferGeometry()
+        starGeo.setAttribute('position', new THREE.BufferAttribute(buildStarPositions(currentStarCount), 3))
+        stars.geometry = starGeo
+        oldStarGeo.dispose()
+      }
+
+      const wantDpr = resolveDpr(pp.resolutionScale)
+      if (wantDpr !== dpr) {
+        dpr = wantDpr
+        renderer.setPixelRatio(dpr)
+        composer.setSize(window.innerWidth, window.innerHeight)
+        bloomPass.setSize(window.innerWidth, window.innerHeight)
+      }
+
+      let bass = 0, high = 0
+      for (let i = 0; i < 14; i++) bass += Math.abs(curAudioData[i] ?? 0)
+      for (let i = 80; i < 120; i++) high += Math.abs(curAudioData[i] ?? 0)
+      bass /= 14
+      high /= 40
+
+      const beatHit = curBeat && !prevBeat
+      prevBeat = curBeat
+
+      if (beatHit) {
+        beatIntensity = 1.0
+        shake.trauma = Math.min(1, shake.trauma + (curEnergy > 0.05 ? 1.2 : 0.7))
+        const kickAngle = Math.random() * Math.PI * 2
+        const kickPower = curEnergy > 0.05 ? 0.3 : 0.15
+        kickX = Math.cos(kickAngle) * kickPower
+        kickY = Math.sin(kickAngle) * kickPower
+        beatScale = curEnergy > 0.05 ? 1.08 : 1.04
+      }
+      beatIntensity *= 0.88
+      beatScale += (1 - beatScale) * 0.12
+      kickX *= 0.7
+      kickY *= 0.7
+
+      shake.trauma *= 0.88
+      const tPow = shake.trauma * shake.trauma
+      const pt = performance.now() * 0.015
+      const tX = (Math.sin(pt * 2.1) + Math.sin(pt * 3.7)) * 0.5 * tPow * 0.4
+      const tY = (Math.sin(pt * 1.9) + Math.sin(pt * 3.3)) * 0.5 * tPow * 0.3
+      const tR = Math.sin(pt * 2.5) * tPow * 0.03
+      shake.vx += (tX - shake.x) * 0.4; shake.vx *= 0.55; shake.x += shake.vx
+      shake.vy += (tY - shake.y) * 0.4; shake.vy *= 0.55; shake.y += shake.vy
+      shake.vr += (tR - shake.rot) * 0.4; shake.vr *= 0.55; shake.rot += shake.vr
+
+      drift.x += (Math.sin(elapsed * 0.3) * 0.5 + Math.sin(elapsed * 0.7) * 0.2 - drift.x) * 0.04
+      drift.y += (Math.cos(elapsed * 0.25) * 0.4 + Math.sin(elapsed * 0.6) * 0.15 - drift.y) * 0.04
+      drift.rot += (Math.sin(elapsed * 0.2) * 0.03 - drift.rot) * 0.04
+
+      camera.position.x = baseCamPos.x + drift.x + shake.x + kickX
+      camera.position.y = baseCamPos.y + drift.y + shake.y + kickY
+      camera.position.z = baseCamPos.z + (beatScale - 1) * -0.5 + curEnergy * -1.2
+      camera.rotation.z = drift.rot + shake.rot
+      camera.lookAt(0, 0, 0)
+
+      points.rotation.y += 0.003 + curEnergy * 0.025
+      points.rotation.x += 0.001 + curEnergy * 0.008
+      points.scale.setScalar(beatScale)
+
+      frozenTime = elapsed
+      material.uniforms.uTime.value = frozenTime
+      material.uniforms.uEnergy.value = curEnergy
+      material.uniforms.uBeat.value = beatIntensity
+      material.uniforms.uBass.value = bass
+      material.uniforms.uHigh.value = high
+      material.uniforms.uPointScale.value = 1 + beatIntensity * 0.2
+      material.uniforms.uDisplace.value = pp.displaceAmount
+
+      stars.rotation.y += 0.0005
+
+      bloomPass.strength = (0.25 + curEnergy * 0.8 + beatIntensity * 0.15) * pp.bloomStrength
+      const motionAmount = Math.abs(shake.x) + Math.abs(shake.y) + Math.abs(kickX) + Math.abs(kickY)
+      ;(afterimagePass.uniforms as { damp: { value: number } }).damp.value = Math.min(0.97, pp.trailAmount + Math.min(0.18, motionAmount * 0.3))
+
+      const hasTrack = titleRef.current.length > 0
+      if (hasTrack && lastTitle !== titleRef.current) {
+        trackOpacity = 0
+        lastTitle = titleRef.current
+      }
+      if (hasTrack) trackOpacity = Math.min(1, trackOpacity + 0.02)
+      else trackOpacity = Math.max(0, trackOpacity - 0.02)
+
+      const osdEl = document.getElementById('sphere-osd')
+      if (osdEl) osdEl.style.opacity = String(trackOpacity)
+
+      composer.render()
+      rafRef.current = requestAnimationFrame(animate)
+    }
+
+    rafRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
