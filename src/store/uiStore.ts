@@ -9,6 +9,10 @@ interface UIState {
   setSearchQuery: (q: string) => void
   selectedVizId: string | null
   setSelectedVizId: (id: string | null) => void
+  profileOpen: boolean
+  setProfileOpen: (v: boolean) => void
+  settingsOpen: boolean
+  setSettingsOpen: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -18,4 +22,8 @@ export const useUIStore = create<UIState>((set) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
   selectedVizId: null,
   setSelectedVizId: (selectedVizId) => set({ selectedVizId }),
+  profileOpen: false,
+  setProfileOpen: (profileOpen) => set({ profileOpen }),
+  settingsOpen: false,
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
 }))
