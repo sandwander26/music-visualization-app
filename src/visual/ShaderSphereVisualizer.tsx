@@ -339,3 +339,64 @@ export function ShaderSphereVisualizer() {
 
     return () => {
       cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', onResize)
+      composer.dispose()
+      renderer.dispose()
+      geometry.dispose()
+      material.dispose()
+      starGeo.dispose()
+      starMat.dispose()
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
+    }
+  }, [])
+
+  return (
+      <>
+        <div
+            ref={containerRef}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 0,
+              background: '#02030a',
+            }}
+        />
+        <div
+            id="sphere-osd"
+            style={{
+              position: 'fixed',
+              bottom: 'calc(min(100vw, 100vh) * 0.04)',
+              left: 0,
+              right: 0,
+              textAlign: 'center',
+              color: '#ffffff',
+              zIndex: 1,
+              pointerEvents: 'none',
+              opacity: 0,
+              transition: 'opacity 0.3s',
+              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+            }}
+        >
+          {artist && (
+              <div
+                  style={{
+                    fontSize: 'calc(min(100vw, 100vh) * 0.014)',
+                    fontWeight: 600,
+                    letterSpacing: 3,
+                    opacity: 0.6,
+                    marginBottom: 6,
+                    textTransform: 'uppercase',
+                  }}
+              >
+                {artist}
+              </div>
+          )}
+          {title && (
+              <div style={{ fontSize: 'calc(min(100vw, 100vh) * 0.02)', fontWeight: 600 }}>{title}</div>
+          )}
+        </div>
+      </>
+  )
+}
