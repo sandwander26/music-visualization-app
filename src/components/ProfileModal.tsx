@@ -330,3 +330,274 @@ function LoginPanel({
           </label>
           <div
             className={`auth-modal__input-shell${errors.email ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-login-email"
+              className="auth-modal__input"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setFormError(null)
+                if (errors.email) setErrors((x) => ({ ...x, email: undefined }))
+              }}
+              placeholder="you@example.com"
+            />
+          </div>
+          {errors.email ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.email}</div>
+          ) : null}
+        </div>
+
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-login-password">
+            Пароль
+          </label>
+          <div
+            className={`auth-modal__input-shell${errors.password ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-login-password"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setFormError(null)
+                if (errors.password) setErrors((x) => ({ ...x, password: undefined }))
+              }}
+              placeholder="••••••••"
+            />
+          </div>
+          {errors.password ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.password}</div>
+          ) : null}
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="auth-modal__link" onClick={onForgotPassword}>
+            Забыли пароль?
+          </button>
+        </div>
+
+        <div className="auth-modal__stack auth-modal__stack--tight" style={{ marginTop: 18 }}>
+          <button type="submit" className="btn btn--primary" style={{ width: '100%' }} disabled={busy}>
+            {busy ? 'Вход…' : 'Войти'}
+          </button>
+        </div>
+
+        {formError ? (
+          <div className="auth-modal__hint auth-modal__hint--error" style={{ marginTop: 12 }}>
+            {formError}
+          </div>
+        ) : null}
+      </form>
+
+      <p className="auth-modal__muted">
+        Нет аккаунта?{' '}
+        <button type="button" className="auth-modal__link" onClick={onSwitchRegister}>
+          Регистрация
+        </button>
+      </p>
+    </>
+  )
+}
+
+function RegisterPanel({
+  onBack,
+  onSwitchLogin,
+}: {
+  onBack: () => void
+  onSwitchLogin: () => void
+}) {
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [password2, setPassword2] = useState('')
+  const [errors, setErrors] = useState<{
+    displayName?: string
+    email?: string
+    password?: string
+    password2?: string
+  }>({})
+  const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const register = useAuthStore((s) => s.register)
+
+  function validate(): boolean {
+    const next: typeof errors = {}
+    const name = displayName.trim()
+    if (name.length > 48) next.displayName = 'Не длиннее 48 символов'
+
+    const em = email.trim()
+    if (!em) next.email = 'Введите email'
+    else if (!EMAIL_RE.test(em)) next.email = 'Некорректный email'
+
+    if (!password) next.password = 'Придумай пароль'
+    else if (password.length < 8) next.password = 'Минимум 8 символов'
+
+    if (!password2) next.password2 = 'Повтори пароль'
+    else if (password !== password2) next.password2 = 'Пароли не совпадают'
+
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setFormError(null)
+    if (!validate()) return
+    setBusy(true)
+    try {
+      await register(email.trim(), password, displayName.trim() || undefined)
+      onBack()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="auth-modal__header-row">
+        <button type="button" className="auth-modal__back" onClick={onBack} aria-label="Назад">
+          <ArrowLeft size={16} strokeWidth={2} />
+        </button>
+        <h2 id="profile-modal-title" className="auth-modal__title">
+          Регистрация
+        </h2>
+      </div>
+      <p className="auth-modal__lead">Создай аккаунт для синхронизации библиотеки, текстов и настроек.</p>
+
+      <form onSubmit={submit} noValidate>
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-reg-name">
+            Имя <span style={{ opacity: 0.65 }}>(необязательно)</span>
+          </label>
+          <div
+            className={`auth-modal__input-shell${errors.displayName ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-reg-name"
+              className="auth-modal__input"
+              type="text"
+              autoComplete="nickname"
+              value={displayName}
+              onChange={(e) => {
+                setDisplayName(e.target.value)
+                setFormError(null)
+                if (errors.displayName) setErrors((x) => ({ ...x, displayName: undefined }))
+              }}
+              placeholder="Как к тебе обращаться"
+            />
+          </div>
+          {errors.displayName ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.displayName}</div>
+          ) : null}
+        </div>
+
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-reg-email">
+            Email
+          </label>
+          <div
+            className={`auth-modal__input-shell${errors.email ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-reg-email"
+              className="auth-modal__input"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setFormError(null)
+                if (errors.email) setErrors((x) => ({ ...x, email: undefined }))
+              }}
+              placeholder="you@example.com"
+            />
+          </div>
+          {errors.email ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.email}</div>
+          ) : null}
+        </div>
+
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-reg-password">
+            Пароль
+          </label>
+          <div
+            className={`auth-modal__input-shell${errors.password ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-reg-password"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setFormError(null)
+                if (errors.password) setErrors((x) => ({ ...x, password: undefined }))
+              }}
+              placeholder="Минимум 8 символов"
+            />
+          </div>
+          {errors.password ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.password}</div>
+          ) : (
+            <div className="auth-modal__hint">Не используй пароль от почты или соцсетей.</div>
+          )}
+        </div>
+
+        <div className="auth-modal__field">
+          <label className="auth-modal__label" htmlFor="profile-reg-password2">
+            Пароль ещё раз
+          </label>
+          <div
+            className={`auth-modal__input-shell${errors.password2 ? ' auth-modal__input-shell--error' : ''}`}
+          >
+            <input
+              id="profile-reg-password2"
+              className="auth-modal__input"
+              type="password"
+              autoComplete="new-password"
+              value={password2}
+              onChange={(e) => {
+                setPassword2(e.target.value)
+                setFormError(null)
+                if (errors.password2) setErrors((x) => ({ ...x, password2: undefined }))
+              }}
+              placeholder="Повтори пароль"
+            />
+          </div>
+          {errors.password2 ? (
+            <div className="auth-modal__hint auth-modal__hint--error">{errors.password2}</div>
+          ) : null}
+        </div>
+
+        <div className="auth-modal__stack auth-modal__stack--tight" style={{ marginTop: 18 }}>
+          <button type="submit" className="btn btn--primary" style={{ width: '100%' }} disabled={busy}>
+            {busy ? 'Создание…' : 'Создать аккаунт'}
+          </button>
+        </div>
+
+        {formError ? (
+          <div className="auth-modal__hint auth-modal__hint--error" style={{ marginTop: 12 }}>
+            {formError}
+          </div>
+        ) : null}
+      </form>
+
+      <p className="auth-modal__muted">
+        Уже есть аккаунт?{' '}
+        <button type="button" className="auth-modal__link" onClick={onSwitchLogin}>
+          Войти
+        </button>
+      </p>
+    </>
+  )
+}
