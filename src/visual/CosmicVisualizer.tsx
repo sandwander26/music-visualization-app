@@ -103,3 +103,84 @@ const FRAGMENT_SHADER = /* glsl */ `
       vec3 palette = getPalette(iPaletteIndex);
       vec4 phases = vec4(palette, 0.0);
       vec4 baseColor = (1.0 + cos(p.x + i * 0.4 + z + phases + iAudioTreble * 3.0)) / d;
+
+      vec4 hotBoost = vec4(1.5, 0.6, 0.2, 1.0) * angularBoost * iAudioBass * 2.5;
+
+      O += baseColor + hotBoost;
+    }
+
+    O *= (1.0 + iAudioRMS * 0.5);
+
+    // тонмаппинг
+    O = tanh(O * O / 400.0);
+
+    gl_FragColor = vec4(O.rgb, 1.0);
+  }
+`
+
+const CosmicMaterial = shaderMaterial(
+  {
+    iResolution: new THREE.Vector2(1920, 1080),
+    iTime: 0,
+    iAudioBass: 0,
+    iAudioBeatPulse: 0,
+    iAudioTreble: 0,
+    iAudioRMS: 0,
+    iRotationStep: 0,
+    iPaletteIndex: 0,
+    iQuality: 14,
+    iBassReactivity: 1,
+  },
+  VERTEX_SHADER,
+  FRAGMENT_SHADER,
+)
+
+extend({ CosmicMaterial })
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    cosmicMaterial: any
+  }
+}
+
+function CosmicScene() {
+  const matRef = useRef<any>(null)
+  const smoothedBassRef = useRef(0)
+  const beatPulseRef = useRef(0)
+  const smoothedTrebleRef = useRef(0)
+  const smoothedRMSRef = useRef(0)
+  const rotationStepRef = useRef(0)
+  const lastBeatRef = useRef(false)
+  const paletteIndexRef = useRef(0)
+
+  const params = useVisualizerParams<CosmicParams>('cosmic')
+  const paramsRef = useRef(params)
+  paramsRef.current = params
+
+  const { size } = useThree()
+  const accumulatorRef = useRef(0)
+  const FRAME_INTERVAL = 1 / 60
+
+  useFrame((_, delta) => {
+    if (!matRef.current) return
+
+    accumulatorRef.current += delta
+    if (accumulatorRef.current < FRAME_INTERVAL) return
+    accumulatorRef.current = accumulatorRef.current % FRAME_INTERVAL
+
+    const state = useAudioStore.getState()
+    const audioData = state.audioData
+    const beat = state.beat
+
+    let bassRaw = 0
+    if (audioData && audioData.length > 0) {
+      for (let i = 0; i < 20; i++) bassRaw += audioData[i] ?? 0
+      bassRaw /= 20
+    }
+
+    let trebleRaw = 0
+    if (audioData && audioData.length > 100) {
+      const end = Math.min(200, audioData.length)
+      for (let i = 100; i < end; i++) trebleRaw += audioData[i] ?? 0
+      trebleRaw /= end - 100
+    }
