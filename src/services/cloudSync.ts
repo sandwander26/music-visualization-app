@@ -96,3 +96,82 @@ function trackToCloudItem(t: {
 function cloudItemToPersisted(item: CloudLibraryItemPayload, coverPath: string | null): PersistedTrack {
   return {
     id: item.id,
+    title: item.title,
+    artist: item.artist,
+    album: item.album ?? '',
+    originalFileName: item.originalFileName,
+    sourceFileSize: item.sourceFileSize ?? null,
+    audioPath: `tracks/${item.id}.pending`,
+    coverPath,
+    features: (item.features as PersistedTrack['features']) ?? null,
+    moodWeights: (item.moodWeights as PersistedTrack['moodWeights']) ?? null,
+    addedAt: item.addedAt,
+    durationSec: item.durationSec,
+  }
+}
+
+async function refreshAuthStorage(): Promise<void> {
+  const { useAuthStore } = await import('../store/authStore')
+  try {
+    await useAuthStore.getState().refreshMe()
+  } catch (err) {
+    console.warn('[cloud] refresh storage:', err)
+  }
+}
+
+export async function flushCloudPush(token: string): Promise<void> {
+  if (pushTimer != null) {
+    clearTimeout(pushTimer)
+    pushTimer = null
+  }
+  await pushCloudState(token)
+  await refreshAuthStorage()
+}
+
+export async function purgeTracksFromCloud(token: string, trackIds: string[]): Promise<void> {
+  if (trackIds.length === 0) return
+  for (const trackId of trackIds) {
+    try {
+      await deleteTrackAudio(token, trackId)
+    } catch (err) {
+      console.warn('[cloud] delete audio', trackId, err)
+    }
+  }
+  const { useAuthStore } = await import('../store/authStore')
+  const removed = new Set(trackIds)
+  useAuthStore
+    .getState()
+    .setCloudAudioTrackIds(
+      useAuthStore.getState().cloudAudioTrackIds.filter((id) => !removed.has(id)),
+    )
+}
+
+export async function syncCloudAfterTracksRemoved(trackIds: string[]): Promise<void> {
+  const { useAuthStore } = await import('../store/authStore')
+  const token = useAuthStore.getState().token
+  if (!token) return
+  await purgeTracksFromCloud(token, trackIds)
+  await flushCloudPush(token)
+}
+
+export function scheduleCloudPush(_reason?: string): void {
+  void import('../store/authStore').then(({ useAuthStore }) => {
+    if (!useAuthStore.getState().token) return
+    if (pushTimer != null) clearTimeout(pushTimer)
+    pushTimer = setTimeout(() => {
+      pushTimer = null
+      const token = useAuthStore.getState().token
+      if (!token) return
+      void pushCloudState(token)
+        .then(() => refreshAuthStorage())
+        .catch((e) => {
+          console.warn('[cloud] push:', e)
+        })
+    }, 1800)
+  })
+}
+
+export async function pushCloudState(token: string): Promise<void> {
+  const settings: AppSettings = {
+    libraryView: useSettingsStore.getState().libraryView,
+    karaokeOnLyricsLoaded: useSettingsStore.getState().karaokeOnLyricsLoaded,
