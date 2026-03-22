@@ -184,3 +184,56 @@ function CosmicScene() {
       for (let i = 100; i < end; i++) trebleRaw += audioData[i] ?? 0
       trebleRaw /= end - 100
     }
+
+    let rmsRaw = 0
+    if (audioData && audioData.length > 0) {
+      for (let i = 0; i < audioData.length; i++) rmsRaw += audioData[i] ?? 0
+      rmsRaw /= audioData.length
+    }
+
+    // сглаживание без привязки к fps
+    const smoothK = 1 - Math.pow(0.0001, delta)
+    smoothedBassRef.current += (bassRaw - smoothedBassRef.current) * smoothK
+    smoothedTrebleRef.current += (trebleRaw - smoothedTrebleRef.current) * smoothK
+    smoothedRMSRef.current += (rmsRaw - smoothedRMSRef.current) * smoothK
+
+    const pp = paramsRef.current
+    rotationStepRef.current += delta * 0.15 * pp.rotationSpeed
+
+    if (beat && !lastBeatRef.current) {
+      rotationStepRef.current += Math.PI / 12
+      if (pp.paletteIndex < 0) {
+        paletteIndexRef.current = (paletteIndexRef.current + 1) % PALETTE_COUNT
+      }
+    }
+    lastBeatRef.current = beat
+
+    if (beat) beatPulseRef.current = 1
+    const decayK = Math.pow(0.01, delta)
+    beatPulseRef.current *= decayK
+
+    matRef.current.iTime += delta
+    matRef.current.iResolution.set(size.width, size.height)
+    matRef.current.iAudioBass = smoothedBassRef.current
+    matRef.current.iAudioBeatPulse = beatPulseRef.current
+    matRef.current.iAudioTreble = smoothedTrebleRef.current
+    matRef.current.iAudioRMS = smoothedRMSRef.current
+    matRef.current.iRotationStep = rotationStepRef.current
+    matRef.current.iPaletteIndex = pp.paletteIndex >= 0 ? pp.paletteIndex : paletteIndexRef.current
+    matRef.current.iQuality = pp.quality
+    matRef.current.iBassReactivity = pp.bassReactivity
+  })
+
+  return (
+    <mesh>
+      <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
+      {/* @ts-ignore */}
+      <cosmicMaterial ref={matRef} />
+    </mesh>
+  )
+}
+
+export function CosmicVisualizer() {
+  const composerRef = useRef<{ render: (d?: number) => void } | null>(null)
+  const params = useVisualizerParams<CosmicParams>('cosmic')
+  const dprCap = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
