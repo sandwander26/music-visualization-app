@@ -237,3 +237,29 @@ export function CosmicVisualizer() {
   const composerRef = useRef<{ render: (d?: number) => void } | null>(null)
   const params = useVisualizerParams<CosmicParams>('cosmic')
   const dprCap = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+  const dpr = Math.min(Math.max(0.5, params.resolutionScale), 2, dprCap)
+  return (
+    <div style={{ width: '100%', height: '100%', background: BG_COLOR }}>
+      <Canvas camera={CAMERA} dpr={dpr} gl={{ preserveDrawingBuffer: true }}>
+        <AudioInvalidator composerRef={composerRef} />
+        <color attach="background" args={[BG_COLOR]} />
+        <CosmicScene />
+        <EffectComposer ref={composerRef as any}>
+          <Bloom
+            intensity={1.2 * params.bloomIntensity}
+            luminanceThreshold={0.4}
+            luminanceSmoothing={0.9}
+            mipmapBlur
+          />
+          <ChromaticAberration
+            offset={CHROMATIC_OFFSET}
+            blendFunction={BlendFunction.NORMAL}
+            radialModulation={false}
+            modulationOffset={0}
+          />
+          <Vignette darkness={0.4} offset={0.15} />
+        </EffectComposer>
+      </Canvas>
+    </div>
+  )
+}
