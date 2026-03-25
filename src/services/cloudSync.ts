@@ -175,3 +175,81 @@ export async function pushCloudState(token: string): Promise<void> {
   const settings: AppSettings = {
     libraryView: useSettingsStore.getState().libraryView,
     karaokeOnLyricsLoaded: useSettingsStore.getState().karaokeOnLyricsLoaded,
+    autoSearchLyrics: useSettingsStore.getState().autoSearchLyrics,
+    defaultVolume: useSettingsStore.getState().defaultVolume,
+  }
+  await putSettings(token, settings)
+
+  const tracks = useLibraryStore.getState().tracks
+  const items = tracks.map((t) => ({
+    trackId: t.id,
+    item: trackToCloudItem(t),
+  }))
+  await putLibrary(token, items)
+
+  for (const t of tracks) {
+    const fn = t.originalFileName
+    const sz = t.sourceFileSize ?? t.file?.size
+    if (fn && sz != null) {
+      const cached = readLyricsDiskCache(fn, sz)
+      if (cached?.raw) {
+        await putTrackLrc(token, t.id, {
+          lrcText: cached.raw,
+          catalogArtist: cached.catalogArtist,
+          catalogTitle: cached.catalogTitle,
+        })
+      }
+    }
+
+    try {
+      let coverBytes: Uint8Array | null = null
+      let mime = 'image/jpeg'
+      if (t.coverPath) {
+        coverBytes = await loadCoverBytes(t.coverPath)
+        mime = t.coverPath.endsWith('.png')
+          ? 'image/png'
+          : t.coverPath.endsWith('.webp')
+            ? 'image/webp'
+            : 'image/jpeg'
+      } else if (t.cover?.startsWith('blob:') || t.cover?.startsWith('http')) {
+        const blob = await fetch(t.cover).then((r) => r.blob())
+        if (blob.size > 0) {
+          coverBytes = new Uint8Array(await blob.arrayBuffer())
+          mime = blob.type || 'image/jpeg'
+        }
+      }
+      if (coverBytes && coverBytes.byteLength > 0) {
+        await putTrackCover(token, t.id, mime, bytesToBase64(coverBytes))
+      }
+    } catch (err) {
+      console.warn('[cloud] cover upload', t.id, err)
+    }
+  }
+
+  const presetsPayload = readPresetsFromLocalStorage()
+  await putPresets(token, presetsPayload)
+
+  if (isUserVizPersistenceAvailable()) {
+    const metas = await loadUserVizManifest()
+    const items: UserVizCloudItem[] = []
+    for (const m of metas) {
+      if (!m.id.startsWith('user-')) continue
+      try {
+        const source = await readUserVizFile(m.sourcePath)
+        items.push({
+          vizId: m.id,
+          name: m.name,
+          moods: m.moods,
+          source,
+          createdAt: m.createdAt,
+        })
+      } catch (err) {
+        console.warn('[cloud] user-viz upload', m.id, err)
+      }
+    }
+    await putUserViz(token, items)
+  }
+}
+
+export async function pullCloudSnapshot(token: string): Promise<void> {
+  const snap = await fetchSnapshot(token)
