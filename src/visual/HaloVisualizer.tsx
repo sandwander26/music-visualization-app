@@ -69,3 +69,57 @@ function Blob() {
       for (let i = 0; i < 20; i++) bassRaw += audioData[i] ?? 0
       bassRaw /= 20
     }
+
+    // сглаживание без привязки к fps
+    const bassK = 1 - Math.pow(0.0001, delta)
+    smoothedBassRef.current =
+      smoothedBassRef.current + (bassRaw - smoothedBassRef.current) * bassK
+
+    if (beat) beatPulseRef.current = 1
+    const decayK = Math.pow(0.01, delta)
+    beatPulseRef.current *= decayK
+
+    tRef.current += delta * 0.3
+    if (displaceRef.current) {
+      displaceRef.current.offset.x = tRef.current
+      displaceRef.current.offset.y = tRef.current * 0.7
+      displaceRef.current.offset.z = tRef.current * 0.5
+
+      const da = paramsRef.current.displaceAmount
+      displaceRef.current.strength =
+        (DISPLACE_STRENGTH + smoothedBassRef.current * 0.5 + beatPulseRef.current * 0.4) * da
+    }
+
+    // раздувание на бите
+    if (meshRef.current) {
+      const scaleTarget =
+        1 + beatPulseRef.current * 0.15 + smoothedBassRef.current * 0.08
+      const scaleK = 1 - Math.pow(0.001, delta)
+      const currentScale = meshRef.current.scale.x
+      meshRef.current.scale.setScalar(
+        currentScale + (scaleTarget - currentScale) * scaleK
+      )
+
+      const driftT = tRef.current * 0.4
+      meshRef.current.position.x = Math.sin(driftT) * 0.5
+    }
+  })
+
+  return (
+    <mesh ref={meshRef}>
+      <icosahedronGeometry args={[1, params.subdivisions]} />
+      {/* @ts-ignore */}
+      <LayerMaterial lighting="standard" color={BLOB_BASE_COLOR}>
+        {/* @ts-ignore */}
+        <Displace
+          ref={displaceRef}
+          strength={DISPLACE_STRENGTH}
+          scale={DISPLACE_SCALE}
+          type="perlin"
+          offset={DISPLACE_OFFSET_INIT}
+        />
+        {/* @ts-ignore */}
+        <Fresnel
+          mode="add"
+          color={params.fresnelColor}
+          alpha={FRESNEL_ALPHA}
