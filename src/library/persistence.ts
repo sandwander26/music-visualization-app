@@ -74,3 +74,79 @@ function isValidPersistedTrack(v: unknown): v is PersistedTrack {
     (typeof o.addedAt === 'string' || typeof o.addedAt === 'number') &&
     typeof o.durationSec === 'number'
   )
+}
+
+export async function loadLibraryManifest(): Promise<PersistedTrack[]> {
+  if (!isPersistenceAvailable()) return []
+  try {
+    const stored = await idbGet<PersistedTrack[]>(MANIFEST_KEY)
+    if (!Array.isArray(stored)) return []
+    const valid: PersistedTrack[] = []
+    for (const entry of stored) {
+      if (!isValidPersistedTrack(entry)) continue
+      valid.push({
+        ...entry,
+        album: typeof entry.album === 'string' ? entry.album : '',
+        features: entry.features ?? null,
+        moodWeights: entry.moodWeights ?? null,
+        addedAt:
+          typeof entry.addedAt === 'string'
+            ? entry.addedAt
+            : new Date(Number(entry.addedAt)).toISOString(),
+      })
+    }
+    return valid
+  } catch (err) {
+    console.warn('[persistence] чтение library manifest упало:', err)
+    return []
+  }
+}
+
+let writeChain: Promise<void> = Promise.resolve()
+
+export async function saveLibraryManifest(tracks: PersistedTrack[]): Promise<void> {
+  if (!isPersistenceAvailable()) return
+  const job = async (): Promise<void> => {
+    try {
+      await idbSet(MANIFEST_KEY, tracks)
+    } catch (err) {
+      console.warn('[persistence] запись library manifest упала:', err)
+      throw err
+    }
+  }
+  writeChain = writeChain.then(job, job)
+  return writeChain
+}
+
+export async function deleteTrackFiles(trackId: string): Promise<void> {
+  if (!isPersistenceAvailable()) return
+  await idbDel(audioKey(trackId))
+  await idbDel(coverKey(trackId))
+}
+
+export async function loadTrackBytes(audioPath: string): Promise<Uint8Array> {
+  if (!isPersistenceAvailable()) throw new Error('Persistence unavailable')
+  const blob = await idbGet<Blob>(audioPath)
+  if (!blob) throw new Error(`Аудио не найдено: ${audioPath}`)
+  return blobToBytes(blob)
+}
+
+export async function loadCoverObjectUrl(coverPath: string): Promise<string> {
+  if (!isPersistenceAvailable()) throw new Error('Persistence unavailable')
+  const blob = await idbGet<Blob>(coverPath)
+  if (!blob) throw new Error(`Обложка не найдена: ${coverPath}`)
+  return URL.createObjectURL(blob)
+}
+
+export function audioMimeFromPath(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'flac': return 'audio/flac'
+    case 'wav': return 'audio/wav'
+    case 'm4a': return 'audio/mp4'
+    case 'aac': return 'audio/aac'
+    case 'ogg': return 'audio/ogg'
+    case 'opus': return 'audio/opus'
+    default: return 'audio/mpeg'
+  }
+}
