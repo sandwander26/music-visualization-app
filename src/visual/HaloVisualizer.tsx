@@ -123,3 +123,56 @@ function Blob() {
           mode="add"
           color={params.fresnelColor}
           alpha={FRESNEL_ALPHA}
+          power={FRESNEL_POWER}
+          intensity={FRESNEL_INTENSITY}
+        />
+      </LayerMaterial>
+    </mesh>
+  )
+}
+
+export function HaloVisualizer() {
+  const composerRef = useRef<{ render: (d?: number) => void } | null>(null)
+  const params = useVisualizerParams<HaloParams>('halo')
+  const dprCap = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+  const dpr = Math.min(Math.max(0.5, params.resolutionScale), 2, dprCap)
+  return (
+    <div style={{ width: '100%', height: '100%', background: BG_COLOR }}>
+      <Canvas camera={CAMERA_CONFIG} dpr={dpr} gl={{ preserveDrawingBuffer: true }}>
+        <AudioInvalidator composerRef={composerRef} />
+        <color attach="background" args={BG_COLOR_ARGS} />
+        <ambientLight intensity={1} />
+
+        <Float
+          speed={1.2 * params.floatIntensity}
+          rotationIntensity={0}
+          floatIntensity={2.5 * params.floatIntensity}
+          floatingRange={FLOATING_RANGE}
+        >
+          <Blob />
+        </Float>
+
+        <EffectComposer ref={composerRef as any}>
+          <Bloom
+            intensity={2.5 * params.bloomIntensity}
+            luminanceThreshold={0.1}
+            luminanceSmoothing={0.9}
+            mipmapBlur
+          />
+          <ChromaticAberration
+            offset={CHROMATIC_OFFSET}
+            blendFunction={BlendFunction.NORMAL}
+            radialModulation={false}
+            modulationOffset={0}
+          />
+          <Noise
+            premultiply
+            blendFunction={BlendFunction.ADD}
+            opacity={0.05}
+          />
+          <Vignette darkness={0.7} offset={0.1} />
+        </EffectComposer>
+      </Canvas>
+    </div>
+  )
+}
