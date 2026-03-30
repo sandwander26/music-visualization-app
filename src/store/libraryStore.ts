@@ -233,3 +233,199 @@ function enqueueAnalysis(trackId: string): void {
     let ctx: AudioContext | null = null
     try {
       const arrayBuf = await readTrackArrayBuffer(exists)
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      ctx = new AC()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuf)
+      const features = await analyzeMeyda(audioBuffer)
+      const moodWeights = computeMoodWeights(features)
+      useLibraryStore.setState((s) => ({
+        tracks: s.tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, features, moodWeights, isAnalyzing: false, analyzeFailed: false }
+            : t,
+        ),
+      }))
+      void persistCurrentManifest()
+    } catch (err) {
+      console.warn('[library] анализ упал для', exists.name, err)
+      useLibraryStore.setState((s) => ({
+        tracks: s.tracks.map((t) =>
+          t.id === trackId ? { ...t, isAnalyzing: false, analyzeFailed: true } : t,
+        ),
+      }))
+    } finally {
+      if (ctx) {
+        try { await ctx.close() } catch { /* ignore */ }
+      }
+    }
+  })
+}
+
+async function readTrackArrayBuffer(track: LibraryTrack): Promise<ArrayBuffer> {
+  if (track.file) return await track.file.arrayBuffer()
+  if (track.audioPath && isPersistenceAvailable()) {
+    const bytes = await loadTrackBytes(track.audioPath)
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  }
+  throw new Error('Трек не имеет источника аудио')
+}
+
+function normAlbumKeyPart(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function pickAlbumCoverDonor(tracks: LibraryTrack[], artist: string, album: string): LibraryTrack | undefined {
+  const na = normAlbumKeyPart(artist)
+  const nb = normAlbumKeyPart(album)
+  if (!na || !nb) return undefined
+  const group = tracks.filter(
+    (t) => t.cover && normAlbumKeyPart(t.artist) === na && normAlbumKeyPart(t.album) === nb,
+  )
+  if (group.length === 0) return undefined
+  const withPath = group.filter((t) => t.coverPath).sort((a, b) => a.addedAt - b.addedAt)
+  if (withPath.length > 0) return withPath[0]
+  return [...group].sort((a, b) => a.addedAt - b.addedAt)[0]
+}
+
+async function cloneCoverFromDonorToTrack(trackId: string, donor: LibraryTrack): Promise<boolean> {
+  if (!donor.cover || donor.id === trackId) return false
+  try {
+    const blob = await fetch(donor.cover).then((r) => r.blob())
+    if (!blob.size) return false
+    const url = URL.createObjectURL(blob)
+    useLibraryStore.getState().applyEnrichedCover(trackId, url)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function reconcileAlbumArtForTrack(trackId: string): void {
+  const { tracks } = useLibraryStore.getState()
+  const tr = tracks.find((t) => t.id === trackId)
+  if (!tr) return
+  const art = tr.artist.trim()
+  const alb = tr.album.trim()
+  if (!art || !alb) return
+
+  if (tr.coverPath && tr.cover) return
+
+  const donor = pickAlbumCoverDonor(tracks, art, alb)
+  if (!donor || donor.id === trackId || !donor.cover) return
+
+  if (!tr.cover) {
+    void cloneCoverFromDonorToTrack(trackId, donor)
+    return
+  }
+
+  if (!tr.coverPath && donor.coverPath) {
+    void cloneCoverFromDonorToTrack(trackId, donor)
+  }
+}
+
+let unifyAlbumCoversTimer: ReturnType<typeof setTimeout> | null = null
+
+function queueUnifyAlbumCoversInLibrary(): void {
+  if (unifyAlbumCoversTimer != null) clearTimeout(unifyAlbumCoversTimer)
+  unifyAlbumCoversTimer = setTimeout(() => {
+    unifyAlbumCoversTimer = null
+    void unifyAlbumCoversInLibraryInner()
+  }, 420)
+}
+
+function groupTracksByArtistAndLooseAlbum(tracks: LibraryTrack[]): LibraryTrack[][] {
+  const byArtist = new Map<string, LibraryTrack[]>()
+  for (const t of tracks) {
+    const ka = normAlbumKeyPart(t.artist)
+    if (!ka) continue
+    if (!byArtist.has(ka)) byArtist.set(ka, [])
+    byArtist.get(ka)!.push(t)
+  }
+  const result: LibraryTrack[][] = []
+  for (const [, arr] of byArtist) {
+    if (arr.length < 2) continue
+    const nonEmpty = arr.map((t) => t.album.trim()).filter(Boolean)
+    if (nonEmpty.length === 0) continue
+    const canonAlbum = [...nonEmpty].sort((a, b) => b.length - a.length)[0]
+    const cluster = arr.filter(
+      (t) =>
+        !t.album.trim() ||
+        normAlbumKeyPart(t.album) === normAlbumKeyPart(canonAlbum) ||
+        albumsLikelySame(t.album, canonAlbum),
+    )
+    if (cluster.length >= 2) result.push(cluster)
+  }
+  return result
+}
+
+async function unifyAlbumCoversInLibraryInner(): Promise<void> {
+  const tracks = useLibraryStore.getState().tracks
+  const groups = groupTracksByArtistAndLooseAlbum(tracks)
+  for (const members of groups) {
+    if (members.length < 2) continue
+
+    const canonAlbum =
+      members.map((m) => m.album.trim()).filter(Boolean).sort((a, b) => b.length - a.length)[0] ?? ''
+    const artist = members[0].artist.trim()
+    if (!canonAlbum || !artist) continue
+
+    const urls = members.map((m) => m.cover).filter(Boolean) as string[]
+    const unique = new Set(urls)
+    const someMissing = members.some((m) => !m.cover)
+    if (!someMissing && unique.size <= 1) continue
+
+    const tmpUrl = await resolveAlbumArtBlobUrl({ artist, album: canonAlbum })
+    if (!tmpUrl) {
+      for (const m of members) reconcileAlbumArtForTrack(m.id)
+      continue
+    }
+
+    let blob: Blob
+    try {
+      blob = await fetch(tmpUrl).then((r) => r.blob())
+    } catch {
+      URL.revokeObjectURL(tmpUrl)
+      for (const m of members) reconcileAlbumArtForTrack(m.id)
+      continue
+    }
+    URL.revokeObjectURL(tmpUrl)
+    if (!blob.size) continue
+
+    for (const m of members) {
+      const url = URL.createObjectURL(blob)
+      useLibraryStore.getState().applyEnrichedCover(m.id, url)
+    }
+  }
+}
+
+export const useLibraryStore = create<LibraryStore>((set, get) => ({
+  tracks: [],
+  currentTrackId: null,
+  isLoadingFromDisk: false,
+
+  addTrack: async (file) => {
+    const meta = await parseFileMetadata(file)
+    const mergedDisplay = mergeTrackDisplayFromFilename(file.name, {
+      title: meta.title,
+      artist: meta.artist,
+      album: meta.album,
+      cover: '',
+    })
+
+    const dup = findExistingSameUpload(get().tracks, file, meta, mergedDisplay)
+    if (dup) {
+      if (meta.coverObjectUrl) URL.revokeObjectURL(meta.coverObjectUrl)
+      return { track: dup, added: false }
+    }
+
+    const cloudSlot = findCloudOnlySlot(get().tracks, file)
+    const id = cloudSlot?.id ?? makeId()
+
+    let audioPath: string | null = null
+    let coverPath: string | null = cloudSlot?.coverPath ?? null
+    if (isPersistenceAvailable()) {
+      try {
+        const saved = await saveTrackFiles(file, meta.coverBlob, id)
+        audioPath = saved.audioPath
+        if (!cloudSlot?.coverPath) coverPath = saved.coverPath
+      } catch (err) {
