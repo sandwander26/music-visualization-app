@@ -56,3 +56,42 @@ export async function downloadCloudAudioToDevice(trackId: string): Promise<void>
 
   await useLibraryStore.getState().persistManifest()
   scheduleCloudPush('audio-downloaded')
+}
+
+export async function uploadLocalAudioToCloud(trackId: string): Promise<void> {
+  const token = useAuthStore.getState().token
+  if (!token) throw new Error('войди в аккаунт')
+
+  const track = useLibraryStore.getState().tracks.find((t) => t.id === trackId)
+  if (!track?.audioPath || isPendingAudioPath(track.audioPath)) {
+    throw new Error('сначала добавь аудиофайл на это устройство')
+  }
+
+  const bytes = await loadTrackBytes(track.audioPath)
+  const mime = audioMimeFromPath(track.audioPath)
+
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  const dataBase64 = btoa(binary)
+
+  await putTrackAudio(token, trackId, mime, dataBase64)
+  const ids = new Set(useAuthStore.getState().cloudAudioTrackIds)
+  ids.add(trackId)
+  useAuthStore.getState().setCloudAudioTrackIds([...ids])
+  await useAuthStore.getState().refreshMe()
+}
+
+export async function removeCloudAudio(trackId: string): Promise<void> {
+  const token = useAuthStore.getState().token
+  if (!token) throw new Error('войди в аккаунт')
+  await deleteTrackAudio(token, trackId)
+  useAuthStore
+    .getState()
+    .setCloudAudioTrackIds(
+      useAuthStore.getState().cloudAudioTrackIds.filter((id) => id !== trackId),
+    )
+  await useAuthStore.getState().refreshMe()
+}
