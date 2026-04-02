@@ -230,3 +230,36 @@ body {
   color: var(--fg-mute);
   margin-top: 2px;
 }
+
+.player-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 50;
+}
+
+.player-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.7));
+}
+
+.mini-player {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  z-index: 30;
+}
