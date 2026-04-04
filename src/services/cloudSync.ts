@@ -253,3 +253,83 @@ export async function pushCloudState(token: string): Promise<void> {
 
 export async function pullCloudSnapshot(token: string): Promise<void> {
   const snap = await fetchSnapshot(token)
+
+  if (snap.settings?.json) {
+    const s = snap.settings.json
+    const local: AppSettings = {
+      libraryView: s.libraryView === 'grid' ? 'grid' : 'list',
+      karaokeOnLyricsLoaded: Boolean(s.karaokeOnLyricsLoaded),
+      autoSearchLyrics: s.autoSearchLyrics !== false,
+      defaultVolume: s.defaultVolume ?? 1,
+    }
+    useSettingsStore.setState(local)
+    useUIStore.getState().setLibraryView(local.libraryView)
+    try {
+      window.localStorage.setItem('mv_app_settings_v1', JSON.stringify(local))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (snap.presets?.data) {
+    const data = snap.presets.data
+    writePresetsToLocalStorage({
+      currentParams: (data.currentParams ?? {}) as ReturnType<
+        typeof readPresetsFromLocalStorage
+      >['currentParams'],
+      savedPresets: Array.isArray(data.savedPresets)
+        ? (data.savedPresets as ReturnType<typeof readPresetsFromLocalStorage>['savedPresets'])
+        : [],
+    })
+    const hydrated = readPresetsFromLocalStorage()
+    usePresetsStore.setState({
+      currentParams: hydrated.currentParams,
+      savedPresets: hydrated.savedPresets,
+    })
+  }
+
+  if (isUserVizPersistenceAvailable() && Array.isArray(snap.userViz)) {
+    await pullUserVizFromCloud(snap.userViz)
+  }
+
+  if (!isPersistenceAvailable()) return
+
+  const localManifest = await loadLibraryManifest()
+  const localById = new Map(localManifest.map((t) => [t.id, t]))
+  const merged: PersistedTrack[] = []
+
+  await ensureLibraryDirs()
+
+  for (const row of snap.library) {
+    const item = row.item
+    let coverPath = localById.get(item.id)?.coverPath ?? null
+
+    const coverRow = snap.covers.find((c) => c.trackId === item.id)
+    if (coverRow?.dataBase64) {
+      const ext = coverExtForMime(coverRow.mime)
+      coverPath = `covers/${item.id}.${ext}`
+      const bytes = base64ToBytes(coverRow.dataBase64)
+      await idbSet(`cover:${item.id}`, bytes)
+    }
+
+    const local = localById.get(item.id)
+    const entry = cloudItemToPersisted(item, coverPath)
+    if (local?.audioPath && !local.audioPath.endsWith('.pending')) {
+      entry.audioPath = local.audioPath
+    }
+    merged.push(entry)
+
+    const lrcRow = snap.lrc.find((l) => l.trackId === item.id)
+    if (lrcRow && item.originalFileName && item.sourceFileSize != null) {
+      writeLyricsDiskCache(item.originalFileName, item.sourceFileSize, lrcRow.lrcText, {
+        catalogArtist: lrcRow.catalogArtist,
+        catalogTitle: lrcRow.catalogTitle,
+      })
+    }
+  }
+
+  for (const local of localManifest) {
+    if (!merged.some((m) => m.id === local.id)) {
+      merged.push(local)
+    }
+  }
