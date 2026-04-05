@@ -1,0 +1,75 @@
+import type { ParamSchema } from './presetsStore'
+
+export const PARAM_SCHEMAS: Record<string, ParamSchema[]> = {
+  galaxy: [
+    { id: 'starCount', label: 'Количество звёзд', type: 'range', min: 500, max: 5000, step: 100, default: 2000 },
+    { id: 'speed', label: 'Скорость потока', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'hueShift', label: 'Сдвиг оттенка', type: 'range', min: 0, max: 360, step: 1, default: 0 },
+    { id: 'nebulaIntensity', label: 'Туманности', type: 'range', min: 0, max: 2, step: 0.01, default: 1 },
+    { id: 'trailFade', label: 'Шлейф', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0.08 },
+  ],
+  particles: [
+    { id: 'particleCount', label: 'Количество частиц', type: 'range', min: 50, max: 1000, step: 10, default: 200 },
+    { id: 'speed', label: 'Скорость', type: 'range', min: 0.2, max: 3, step: 0.01, default: 1 },
+    { id: 'trailLength', label: 'Длина шлейфа', type: 'range', min: 0, max: 20, step: 1, default: 8 },
+    { id: 'connectionDist', label: 'Дистанция связей', type: 'range', min: 0, max: 200, step: 5, default: 80 },
+    { id: 'hueShift', label: 'Сдвиг оттенка', type: 'range', min: 0, max: 360, step: 1, default: 0 },
+  ],
+  circular: [
+    { id: 'ringSize', label: 'Размер колец', type: 'range', min: 0.3, max: 2, step: 0.01, default: 1 },
+    { id: 'displace', label: 'Деформация', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'rotationSpeed', label: 'Скорость вращения', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'sparkRate', label: 'Частота искр', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'glow', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+  ],
+  barcode: [
+    { id: 'barCount', label: 'Число полос', type: 'range', min: 20, max: 128, step: 1, default: 60 },
+    { id: 'barHeight', label: 'Высота полос', type: 'range', min: 0.2, max: 3, step: 0.01, default: 1 },
+    { id: 'smoothing', label: 'Сглаживание', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0.8 },
+    { id: 'hueSpeed', label: 'Скорость оттенка', type: 'range', min: 0, max: 5, step: 0.01, default: 1 },
+  ],
+  tunnelbars: [
+    { id: 'barHeight', label: 'Высота полос', type: 'range', min: 0.2, max: 2, step: 0.01, default: 1 },
+    { id: 'ringSize', label: 'Размер круга', type: 'range', min: 0.3, max: 2, step: 0.01, default: 1 },
+    { id: 'rotationSpeed', label: 'Скорость вращения', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'smoothing', label: 'Сглаживание', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0.85 },
+    { id: 'tilt', label: 'Перспектива', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+  ],
+  card: [
+    { id: 'barCount', label: 'Число полос', type: 'range', min: 20, max: 128, step: 1, default: 80 },
+    { id: 'smoothing', label: 'Сглаживание', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0.75 },
+    { id: 'beatScale', label: 'Пульс по биту', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'glow', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+  ],
+  cosmic: [
+    { id: 'quality', label: 'Качество шейдера', type: 'range', min: 6, max: 14, step: 1, default: 14 },
+    { id: 'bassReactivity', label: 'Реакция на бас', type: 'range', min: 0, max: 2, step: 0.01, default: 1 },
+    { id: 'rotationSpeed', label: 'Скорость вращения', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'bloomIntensity', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'paletteIndex', label: 'Палитра (-1 = авто)', type: 'range', min: -1, max: 5, step: 1, default: -1 },
+    { id: 'resolutionScale', label: 'Разрешение', type: 'range', min: 0.5, max: 2, step: 0.1, default: 2 },
+  ],
+  sphere: [
+    { id: 'subdivisions', label: 'Детализация сферы', type: 'range', min: 2, max: 6, step: 1, default: 5 },
+    { id: 'starCount', label: 'Количество звёзд', type: 'range', min: 0, max: 2000, step: 100, default: 900 },
+    { id: 'displaceAmount', label: 'Деформация', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'trailAmount', label: 'Шлейф', type: 'range', min: 0.5, max: 0.95, step: 0.01, default: 0.78 },
+    { id: 'bloomStrength', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'resolutionScale', label: 'Разрешение', type: 'range', min: 0.5, max: 2, step: 0.1, default: 2 },
+  ],
+  geometry: [
+    { id: 'shapeCount', label: 'Число фигур', type: 'range', min: 9, max: 49, step: 4, default: 25 },
+    { id: 'sparkMax', label: 'Макс. искр', type: 'range', min: 0, max: 80, step: 5, default: 40 },
+    { id: 'gridDensity', label: 'Плотность сетки', type: 'range', min: 0.5, max: 2, step: 0.1, default: 1 },
+    { id: 'beatPunch', label: 'Удар по биту', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'glow', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+  ],
+  halo: [
+    { id: 'subdivisions', label: 'Детализация', type: 'range', min: 4, max: 32, step: 4, default: 16 },
+    { id: 'displaceAmount', label: 'Деформация', type: 'range', min: 0, max: 2, step: 0.01, default: 1 },
+    { id: 'floatIntensity', label: 'Парение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'bloomIntensity', label: 'Свечение', type: 'range', min: 0, max: 3, step: 0.01, default: 1 },
+    { id: 'fresnelColor', label: 'Цвет ауры', type: 'color', default: '#ffe5d0' },
+    { id: 'resolutionScale', label: 'Разрешение', type: 'range', min: 0.5, max: 2, step: 0.1, default: 2 },
+  ],
+}
