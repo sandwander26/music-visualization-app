@@ -198,3 +198,65 @@ export async function fetchProfileAvatarObjectUrl(token: string): Promise<string
   } catch {
     throw new Error('не удалось загрузить фото профиля')
   }
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const text = await res.text()
+    let err = `ошибка ${res.status}`
+    try {
+      const j = JSON.parse(text) as { error?: string }
+      if (j.error) err = j.error
+    } catch {
+      if (text.includes('Cannot GET')) {
+        err = 'сервер устарел — перезапусти API (npm run server:dev в папке server)'
+      }
+    }
+    throw new Error(err)
+  }
+  const blob = await res.blob()
+  if (!blob.size) return null
+  return URL.createObjectURL(blob)
+}
+
+export async function putProfileAvatar(
+  token: string,
+  mime: string,
+  dataBase64: string,
+): Promise<void> {
+  await apiFetch('/me/avatar', { method: 'PUT', token, body: { mime, dataBase64 } })
+}
+
+export async function deleteProfileAvatar(token: string): Promise<void> {
+  await apiFetch('/me/avatar', { method: 'DELETE', token })
+}
+
+export async function fetchSnapshot(token: string): Promise<SyncSnapshot> {
+  return apiFetch('/sync/snapshot', { token })
+}
+
+export async function putSettings(token: string, settings: AppSettings): Promise<void> {
+  await apiFetch('/sync/settings', { method: 'PUT', token, body: { settings } })
+}
+
+export async function putPresets(
+  token: string,
+  data: { currentParams: Record<string, unknown>; savedPresets: unknown[] },
+): Promise<void> {
+  await apiFetch('/sync/presets', { method: 'PUT', token, body: { data } })
+}
+
+export async function putUserViz(token: string, items: UserVizCloudItem[]): Promise<void> {
+  await apiFetch('/sync/user-viz', { method: 'PUT', token, body: { items } })
+}
+
+export async function putLibrary(
+  token: string,
+  items: { trackId: string; item: CloudLibraryItemPayload }[],
+): Promise<void> {
+  await apiFetch('/sync/library', { method: 'PUT', token, body: { items } })
+}
+
+export async function putTrackLrc(
+  token: string,
+  trackId: string,
+  payload: { lrcText: string; catalogArtist?: string; catalogTitle?: string },
+): Promise<void> {
