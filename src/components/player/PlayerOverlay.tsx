@@ -136,3 +136,188 @@ export default function PlayerOverlay() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'rgba(0,0,0,0.45)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+            }}
+            onClick={() => closeOverlay()}
+          />
+
+          {isFullscreen ? (
+            <FullscreenStage vizId={viz.id} onExit={() => setFullscreen(false)} />
+          ) : (
+            <motion.div
+              className="relative overflow-hidden rounded-2xl"
+              style={{
+                width: '85vw',
+                maxWidth: 1400,
+                maxHeight: '85vh',
+                background: 'var(--bg)',
+                border: '1px solid var(--border-strong)',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+              }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  display: 'flex',
+                  gap: 8,
+                  zIndex: 5,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setFullscreen(true)}
+                  title="На весь экран (F)"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-soft)',
+                    color: 'var(--fg-mute)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Maximize2 size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => closeOverlay()}
+                  title="Закрыть (Esc)"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-soft)',
+                    color: 'var(--fg-mute)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="flex" style={{ height: 'calc(85vh - 0px)', maxHeight: 800 }}>
+                <div
+                  className="flex-1 flex items-center justify-center"
+                  style={{ padding: 24, paddingBottom: 56, minWidth: 0 }}
+                >
+                  <div style={{ width: '100%' }}>
+                    <VisualizerStage vizId={viz.id} isFullscreen={false} />
+                  </div>
+                </div>
+
+                <aside
+                  style={{
+                    width: 320,
+                    flexShrink: 0,
+                    borderLeft: '1px solid var(--border)',
+                    background: 'var(--bg)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    zIndex: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <AnimatePresence mode="wait">
+                    {panelView === 'player' ? (
+                      <motion.div
+                        key="player-view"
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -8 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        style={{
+                          padding: 24,
+                          paddingBottom: 56,
+                          gap: 20,
+                          overflowY: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          flex: 1,
+                        }}
+                      >
+                        <div className="flex items-start justify-between" style={{ gap: 8 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 10,
+                                letterSpacing: '0.16em',
+                                textTransform: 'uppercase',
+                                color: 'var(--fg-mute)',
+                                marginBottom: 6,
+                              }}
+                            >
+                              {CATEGORY_LABELS[viz.category] ?? viz.category} · {viz.subcategory}
+                            </div>
+                            <h2
+                              style={{
+                                fontSize: 20,
+                                fontWeight: 600,
+                                letterSpacing: '-0.02em',
+                                color: 'var(--fg)',
+                              }}
+                            >
+                              {viz.name}
+                            </h2>
+                          </div>
+                        </div>
+
+                        {hasTrack ? (
+                          <TrackInfo />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={goToLibrary}
+                            className="hov-icon-btn t-color-border"
+                            style={{
+                              width: '100%',
+                              padding: '14px 16px',
+                              borderRadius: 12,
+                              border: '1px solid var(--border)',
+                              background: 'var(--bg-soft)',
+                              color: 'var(--fg)',
+                              fontSize: 13,
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            <Library size={14} />
+                            Выбрать трек из библиотеки
+                          </button>
+                        )}
+
+                        <div style={{ borderTop: '1px solid var(--border)' }} />
+
+                        <Transport hasTrack={hasTrack} />
+                        <Scrubber hasTrack={hasTrack} />
+                        <VolumeControl />
+
+                        <div style={{ borderTop: '1px solid var(--border)' }} />
