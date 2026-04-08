@@ -429,3 +429,160 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         audioPath = saved.audioPath
         if (!cloudSlot?.coverPath) coverPath = saved.coverPath
       } catch (err) {
+        console.warn('[library] не удалось сохранить файлы трека:', err)
+      }
+    }
+
+    const coverUrl = meta.coverObjectUrl ?? cloudSlot?.cover ?? null
+
+    const track: LibraryTrack = {
+      id,
+      file,
+      originalFileName: file.name,
+      sourceFileSize: file.size,
+      name: mergedDisplay.title,
+      artist: mergedDisplay.artist,
+      album: mergedDisplay.album,
+      cover: coverUrl,
+      duration: meta.duration,
+      addedAt: cloudSlot?.addedAt ?? Date.now(),
+      audioPath,
+      coverPath,
+      features: cloudSlot?.features,
+      moodWeights: cloudSlot?.moodWeights,
+    }
+
+    if (cloudSlot) {
+      set((s) => ({
+        tracks: s.tracks.map((t) => (t.id === id ? track : t)),
+      }))
+    } else {
+      set((s) => ({ tracks: [...s.tracks, track] }))
+    }
+    void persistCurrentManifest()
+    enqueueAnalysis(id)
+    if (!track.cover) {
+      void enrichLibraryTrackCoverFromCatalog(id, mergedDisplay.artist, mergedDisplay.title, meta.duration)
+    }
+    queueUnifyAlbumCoversInLibrary()
+    return { track, added: true, linkedCloudSlot: Boolean(cloudSlot) }
+  },
+
+  removeTrack: async (id) => {
+    const target = get().tracks.find((t) => t.id === id)
+    if (!target) return
+    const wasCurrent = get().currentTrackId === id
+    if (target.cover && target.cover.startsWith('blob:')) {
+      URL.revokeObjectURL(target.cover)
+    }
+    set((s) => ({
+      tracks: s.tracks.filter((t) => t.id !== id),
+      currentTrackId: s.currentTrackId === id ? null : s.currentTrackId,
+    }))
+    useAudioStore.setState((s) => {
+      const nextQueue = s.playlistQueue.filter((tid) => tid !== id)
+      if (nextQueue.length === s.playlistQueue.length) return {}
+      return {
+        playlistQueue: nextQueue,
+        currentPlaylistMood: nextQueue.length === 0 ? null : s.currentPlaylistMood,
+      }
+    })
+    if (wasCurrent) audioEngine.resetLoadedTrack()
+    catalogCoverFinished.delete(id)
+    if (isPersistenceAvailable()) {
+      try {
+        await deleteTrackFiles(id)
+      } catch (err) {
+        console.warn('[library] не удалось удалить файлы трека:', err)
+      }
+    }
+    void persistAfterTracksRemoved([id])
+  },
+
+  removeTracks: async (ids) => {
+    const idSet = new Set(ids.filter(Boolean))
+    if (idSet.size === 0) return
+    const { tracks, currentTrackId } = get()
+    const targets = tracks.filter((t) => idSet.has(t.id))
+    if (targets.length === 0) return
+
+    const hitCurrent = currentTrackId != null && idSet.has(currentTrackId)
+
+    for (const t of targets) {
+      if (t.cover && t.cover.startsWith('blob:')) URL.revokeObjectURL(t.cover)
+    }
+
+    set((s) => ({
+      tracks: s.tracks.filter((t) => !idSet.has(t.id)),
+      currentTrackId:
+        currentTrackId != null && idSet.has(currentTrackId) ? null : s.currentTrackId,
+    }))
+
+    useAudioStore.setState((s) => {
+      const nextQueue = s.playlistQueue.filter((tid) => !idSet.has(tid))
+      if (nextQueue.length === s.playlistQueue.length) return {}
+      return {
+        playlistQueue: nextQueue,
+        currentPlaylistMood: nextQueue.length === 0 ? null : s.currentPlaylistMood,
+      }
+    })
+
+    if (hitCurrent) audioEngine.resetLoadedTrack()
+
+    for (const id of idSet) catalogCoverFinished.delete(id)
+
+    if (isPersistenceAvailable()) {
+      for (const t of targets) {
+        try {
+          await deleteTrackFiles(t.id)
+        } catch (err) {
+          console.warn('[library] не удалось удалить файлы трека:', t.id, err)
+        }
+      }
+    }
+    void persistAfterTracksRemoved([...idSet])
+  },
+
+  clearAll: async () => {
+    const all = get().tracks
+    const removedIds = all.map((t) => t.id)
+    for (const t of all) {
+      if (t.cover && t.cover.startsWith('blob:')) URL.revokeObjectURL(t.cover)
+    }
+    set({ tracks: [], currentTrackId: null })
+    useAudioStore.getState().clearPlaylistQueue()
+    audioEngine.resetLoadedTrack()
+    catalogCoverFinished.clear()
+    if (isPersistenceAvailable()) {
+      for (const t of all) {
+        try {
+          await deleteTrackFiles(t.id)
+        } catch (err) {
+          console.warn('[library] clearAll: не удалось удалить', t.id, err)
+        }
+      }
+    }
+    void persistAfterTracksRemoved(removedIds)
+  },
+
+  setCurrentTrack: (id) => set({ currentTrackId: id }),
+
+  setTrackFeatures: (trackId, features) =>
+    set((s) => ({
+      tracks: s.tracks.map((t) =>
+        t.id === trackId
+          ? { ...t, features, moodWeights: computeMoodWeights(features), isAnalyzing: false }
+          : t,
+      ),
+    })),
+
+  loadLibraryFromDisk: async () => {
+    if (!isPersistenceAvailable()) return
+    if (get().isLoadingFromDisk) return
+    set({ isLoadingFromDisk: true })
+
+    for (const t of get().tracks) {
+      if (t.cover && t.cover.startsWith('blob:')) URL.revokeObjectURL(t.cover)
+    }
+
+    try {

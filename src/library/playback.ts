@@ -16,3 +16,10 @@ export async function loadTrack(track: LibraryTrack): Promise<void> {
   if (track.file) {
     await audioEngine.loadFile(track.file)
     return
+  }
+  throw new Error('Трек не имеет источника аудио')
+}
+
+export function autoPlayIfLyricsReady(): void {
+  audioEngine.play()
+}
