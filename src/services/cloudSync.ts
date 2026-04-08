@@ -333,3 +333,62 @@ export async function pullCloudSnapshot(token: string): Promise<void> {
       merged.push(local)
     }
   }
+
+  await saveLibraryManifest(merged)
+  useAuthStore
+    .getState()
+    .setCloudAudioTrackIds(snap.cloudAudio.map((a) => a.trackId))
+  await useLibraryStore.getState().loadLibraryFromDisk()
+}
+
+async function pullUserVizFromCloud(
+  rows: {
+    vizId: string
+    name: string
+    moods: string[]
+    source: string
+    createdAt: string
+  }[],
+): Promise<void> {
+  await ensureUserVizDirs()
+  const localMetas = await loadUserVizManifest()
+  const merged: UserVisualizerMeta[] = []
+
+  for (const row of rows) {
+    const rel = `visualizers/${row.vizId}.tsx`
+    await saveUserVizFile(row.vizId, row.source)
+    merged.push({
+      id: row.vizId,
+      name: row.name,
+      moods: row.moods.filter((m): m is MoodId =>
+        ['energetic', 'upbeat', 'calm', 'sad', 'melancholic'].includes(m),
+      ),
+      sourcePath: rel,
+      createdAt: row.createdAt,
+    })
+  }
+
+  for (const local of localMetas) {
+    if (!merged.some((m) => m.id === local.id)) {
+      merged.push(local)
+    }
+  }
+
+  await saveUserVizManifest(merged)
+
+  const restored: UserVisualizerRuntime[] = []
+  for (const m of merged) {
+    let component = null
+    let error: string | null = null
+    try {
+      const source = await readUserVizFile(m.sourcePath)
+      const compiled = compileUserViz(source)
+      component = compiled.component
+      error = compiled.error
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err)
+    }
+    restored.push({ ...m, component, error, previewUrl: null })
+  }
+  useUserVizStore.setState({ visualizers: restored })
+}
