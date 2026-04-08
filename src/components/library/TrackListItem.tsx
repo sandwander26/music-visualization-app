@@ -124,3 +124,86 @@ export default function TrackListItem({
           title="Скачать аудио из облака"
           disabled={cloudBusy}
           onClick={(e) => {
+            e.stopPropagation()
+            onCloudDownload()
+          }}
+          style={cloudActionStyle}
+        >
+          <CloudDownload size={14} />
+        </button>
+      ) : null}
+
+      {!needsLocalFile && onCloudUpload ? (
+        <button
+          type="button"
+          title="Прикрепить аудио к облаку"
+          disabled={cloudBusy}
+          onClick={(e) => {
+            e.stopPropagation()
+            onCloudUpload()
+          }}
+          style={cloudActionStyle}
+        >
+          <CloudUpload size={14} />
+        </button>
+      ) : null}
+
+      <span
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 12,
+          color: 'var(--fg-mute)',
+          width: 48,
+          textAlign: 'right',
+          flexShrink: 0,
+        }}
+      >
+        {formatDuration(track.duration)}
+      </span>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        title="Удалить"
+        className="opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{
+          width: 24,
+          height: 24,
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--fg-mute)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'rgb(239, 68, 68)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--fg-mute)'
+        }}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+const cloudActionStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 7,
+  border: '1px solid var(--border)',
+  background: 'var(--bg-soft)',
+  color: 'var(--fg-mute)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  flexShrink: 0,
+}
