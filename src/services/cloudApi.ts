@@ -260,3 +260,49 @@ export async function putTrackLrc(
   trackId: string,
   payload: { lrcText: string; catalogArtist?: string; catalogTitle?: string },
 ): Promise<void> {
+  await apiFetch(`/sync/tracks/${encodeURIComponent(trackId)}/lrc`, {
+    method: 'PUT',
+    token,
+    body: payload,
+  })
+}
+
+export async function putTrackCover(
+  token: string,
+  trackId: string,
+  mime: string,
+  dataBase64: string,
+): Promise<void> {
+  await apiFetch(`/sync/tracks/${encodeURIComponent(trackId)}/cover`, {
+    method: 'PUT',
+    token,
+    body: { mime, dataBase64 },
+  })
+}
+
+export async function putTrackAudio(
+  token: string,
+  trackId: string,
+  mime: string,
+  dataBase64: string,
+): Promise<{ storage?: { audioBytesUsed: number; audioQuotaBytes: number } }> {
+  return apiFetch(`/sync/tracks/${encodeURIComponent(trackId)}/audio`, {
+    method: 'PUT',
+    token,
+    body: { mime, dataBase64 },
+  })
+}
+
+export async function fetchTrackAudio(
+  token: string,
+  trackId: string,
+): Promise<{ mime: string; sizeBytes: number; dataBase64: string }> {
+  return apiFetch(`/sync/tracks/${encodeURIComponent(trackId)}/audio`, { token })
+}
+
+export async function deleteTrackAudio(token: string, trackId: string): Promise<void> {
+  await apiFetch(`/sync/tracks/${encodeURIComponent(trackId)}/audio`, {
+    method: 'DELETE',
+    token,
+  })
+}
