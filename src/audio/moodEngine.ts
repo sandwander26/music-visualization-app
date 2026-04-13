@@ -56,3 +56,46 @@ export function computeMoodWeights(f: TrackFeatures): MoodWeights {
     { score: smoothAbove(f.flatnessMean, 0.04, 0.02), weight: 0.6 },
     // верхняя граница по шуму
     { score: smoothBelow(f.flatnessMean, 0.20, 0.05), weight: 0.4 },
+  ])
+
+  const calm = weighted([
+    { score: smoothBelow(f.rmsMean, 0.12, 0.04),      weight: 1.0 },
+    { score: smoothBelow(f.flatnessMean, 0.10, 0.04), weight: 0.8 },
+    { score: smoothBelow(f.zcrMean, 0.07, 0.03),      weight: 0.8 },
+  ])
+
+  const sad = weighted([
+    { score: smoothBelow(f.rmsMean, 0.13, 0.04),      weight: 0.6 },
+    { score: smoothBelow(f.centroidMean, 2200, 400),  weight: 1.0 },
+    { score: smoothBelow(f.flatnessMean, 0.06, 0.02), weight: 0.9 },
+    { score: smoothBelow(f.zcrMean, 0.05, 0.02),      weight: 0.5 },
+  ])
+
+  const melancholic = weighted([
+    { score: smoothBelow(f.centroidMean, 2300, 500),  weight: 0.9 },
+    { score: smoothBelow(f.flatnessMean, 0.06, 0.02), weight: 0.7 },
+    { score: smoothBelow(f.zcrMean, 0.07, 0.03),      weight: 0.5 },
+    // не тишина
+    { score: smoothAbove(f.rmsMean, 0.08, 0.04),      weight: 0.4 },
+  ])
+
+  return { energetic, upbeat, calm, sad, melancholic }
+}
+
+export function getTracksByMood(
+  tracks: LibraryTrack[],
+  mood: MoodId,
+  threshold = 0.5,
+): LibraryTrack[] {
+  const scored = tracks
+    .filter((t) => t.features)
+    .map((t) => ({ track: t, weight: computeMoodWeights(t.features!)[mood] }))
+    .filter((x) => x.weight >= threshold)
+    .sort((a, b) => b.weight - a.weight)
+  return scored.map((x) => x.track)
+}
+
+const RECENT_PICK_MEMORY = 3
+
+export interface PickVizContext {
+  avoided: string[]
