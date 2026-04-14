@@ -99,3 +99,46 @@ const RECENT_PICK_MEMORY = 3
 
 export interface PickVizContext {
   avoided: string[]
+  lastPickedForTrack: string | null
+}
+
+export interface PickVizResult {
+  vizId: string | null
+  avoided: string[]
+  lastPickedForTrack: string | null
+}
+
+export interface PickVizOptions {
+  force?: boolean
+}
+
+export function pickVizForMood(
+  mood: MoodId,
+  trackId: string,
+  viz: Array<{ id: string; moods: MoodId[] }>,
+  ctx: PickVizContext,
+  opts: PickVizOptions = {},
+): PickVizResult {
+  if (!opts.force && trackId === ctx.lastPickedForTrack) {
+    return { vizId: null, avoided: ctx.avoided, lastPickedForTrack: ctx.lastPickedForTrack }
+  }
+
+  const candidates = viz.filter((v) => v.moods.includes(mood))
+  if (candidates.length === 0) {
+    return { vizId: null, avoided: ctx.avoided, lastPickedForTrack: trackId }
+  }
+
+  let pool = candidates.filter((c) => !ctx.avoided.includes(c.id))
+  if (pool.length === 0) {
+    const last = ctx.avoided[ctx.avoided.length - 1] ?? null
+    pool = candidates.filter((c) => c.id !== last)
+  }
+  if (pool.length === 0) pool = candidates
+
+  const chosen = pool[Math.floor(Math.random() * pool.length)].id
+
+  const newAvoided = [...ctx.avoided, chosen]
+  if (newAvoided.length > RECENT_PICK_MEMORY) newAvoided.shift()
+
+  return { vizId: chosen, avoided: newAvoided, lastPickedForTrack: trackId }
+}
