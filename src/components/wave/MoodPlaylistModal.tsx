@@ -233,3 +233,238 @@ function ModalHeader({ moodId, count, onPlayAll, onClose, onBack }: ModalHeaderP
             e.currentTarget.style.opacity = '0.85'
           }}
         >
+          <ArrowLeft size={13} />
+          Другое настроение
+        </button>
+      ) : null}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.1,
+            marginBottom: 6,
+          }}
+        >
+          {MOOD_LABELS[moodId]}
+        </div>
+        <div
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            opacity: 0.85,
+          }}
+        >
+          {empty ? 'Пока нет треков' : `${count} ${pluralTrack(count)}`}
+        </div>
+      </div>
+
+      {!empty ? <BigPlayButton onClick={onPlayAll} /> : null}
+
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Закрыть"
+        style={{
+          alignSelf: 'flex-start',
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(0,0,0,0.18)',
+          color: empty ? 'var(--fg-soft)' : '#0a0a0a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+          flexShrink: 0,
+          opacity: 0.7,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(0,0,0,0.3)'
+          e.currentTarget.style.opacity = '1'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(0,0,0,0.18)'
+          e.currentTarget.style.opacity = '0.7'
+        }}
+      >
+        <X size={15} />
+      </button>
+    </div>
+  )
+}
+
+interface BigPlayButtonProps {
+  onClick: () => void
+}
+
+function BigPlayButton({ onClick }: BigPlayButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Запустить плейлист"
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        border: 'none',
+        background: '#ffffff',
+        color: '#0a0a0a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 4px 14px rgba(0,0,0,0.28)',
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        flexShrink: 0,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'scale(1.05)'
+        e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'scale(1)'
+        e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.28)'
+      }}
+      onMouseDown={(e) => {
+        e.currentTarget.style.transform = 'scale(0.97)'
+      }}
+      onMouseUp={(e) => {
+        e.currentTarget.style.transform = 'scale(1.05)'
+      }}
+    >
+      <Play size={22} fill="currentColor" style={{ marginLeft: 3 }} />
+    </button>
+  )
+}
+
+interface PlaylistTrackRowProps {
+  track: LibraryTrack
+  isCurrent: boolean
+  isPlaying: boolean
+  onActivate: () => void
+}
+
+function PlaylistTrackRow({ track, isCurrent, isPlaying, onActivate }: PlaylistTrackRowProps) {
+  const [hovered, setHovered] = useState(false)
+
+  const showOverlay = isCurrent || hovered
+  let overlayContent: React.ReactNode = null
+  if (isCurrent && isPlaying) {
+    overlayContent = hovered
+      ? <Pause size={14} fill="currentColor" />
+      : <PlayingIndicator color="#fff" />
+  } else if (isCurrent && !isPlaying) {
+    overlayContent = <Play size={14} fill="currentColor" style={{ marginLeft: 1 }} />
+  } else if (hovered) {
+    overlayContent = <Play size={14} fill="currentColor" style={{ marginLeft: 1 }} />
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onActivate()
+        }
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        height: 60,
+        padding: '8px 12px',
+        borderRadius: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        background: isCurrent
+          ? 'var(--bg-elev)'
+          : hovered
+            ? 'var(--bg-soft)'
+            : 'transparent',
+        border: `1px solid ${isCurrent ? 'var(--border-active)' : 'transparent'}`,
+        cursor: 'pointer',
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 6,
+          flexShrink: 0,
+          overflow: 'hidden',
+          background: track.cover
+            ? 'transparent'
+            : 'linear-gradient(135deg, var(--bg-elev) 0%, var(--bg-hover) 100%)',
+          border: '1px solid var(--border)',
+          position: 'relative',
+        }}
+      >
+        {track.cover ? (
+          <img
+            src={track.cover}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : null}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'opacity 0.15s',
+            color: '#fff',
+            opacity: showOverlay ? 1 : 0,
+            pointerEvents: 'none',
+          }}
+        >
+          {overlayContent}
+        </div>
+      </div>
+
+      <div className="flex flex-col min-w-0 flex-1" style={{ gap: 2 }}>
+        <span
+          className="truncate"
+          style={{
+            fontSize: 14,
+            fontWeight: 500,
+            color: 'var(--fg)',
+            letterSpacing: '-0.005em',
+          }}
+        >
+          {track.name}
+        </span>
+        <div className="truncate" style={{ fontSize: 12, color: 'var(--fg-soft)' }}>
+          {track.artist}
+        </div>
+      </div>
+
+      <span
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 12,
+          color: 'var(--fg-mute)',
+          width: 48,
+          textAlign: 'right',
+          flexShrink: 0,
+        }}
+      >
+        {formatDuration(track.duration)}
+      </span>
+    </div>
+  )
+}
+
