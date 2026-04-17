@@ -154,3 +154,159 @@ export default function Wave() {
                   exit={{
                     opacity: 0,
                     scale: 0.94,
+                    transition: { duration: 0.32, delay: idx * 0.025, ease: 'easeOut' },
+                  }}
+                >
+                  <MoodCard
+                    mood={m}
+                    count={countsByMood[m]}
+                    onOpenPlaylist={() => handleCardClick(m)}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+
+          {stage === 'loading' && selectedMood && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1] }}
+              style={{
+                minHeight: 280,
+                borderRadius: 22,
+                background: MOOD_GRADIENTS[selectedMood],
+                color: '#0a0a0a',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.32)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 22,
+                padding: 48,
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  opacity: 0.7,
+                }}
+              >
+                {MOOD_LABELS[selectedMood]}
+              </div>
+              <Spinner />
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.32, ease: 'easeOut' }}
+                style={{
+                  fontSize: 18,
+                  fontWeight: 500,
+                  color: '#0a0a0a',
+                  letterSpacing: '-0.005em',
+                }}
+              >
+                {loadingText}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <DebugSection tracks={tracks} />
+
+      {stage === 'playlist' && selectedMood !== null ? (
+        <MoodPlaylistModal
+          moodId={selectedMood}
+          onClose={() => {
+            setStage('select')
+            setSelectedMood(null)
+          }}
+          onBack={handleBack}
+        />
+      ) : null}
+    </main>
+  )
+}
+
+function Spinner() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: 52,
+        height: 52,
+        borderRadius: '50%',
+        border: '3px solid rgba(10,10,10,0.18)',
+        borderTopColor: '#0a0a0a',
+        animation: 'waveSpin 0.9s linear infinite',
+      }}
+    >
+      <style>{`@keyframes waveSpin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}
+
+interface MoodCardProps {
+  mood: MoodId
+  count: number
+  onOpenPlaylist: () => void
+}
+
+function MoodCard({ mood, count, onOpenPlaylist }: MoodCardProps) {
+  const empty = count === 0
+
+  return (
+    <button
+      type="button"
+      onClick={empty ? undefined : onOpenPlaylist}
+      disabled={empty}
+      className="hov-lift"
+      style={{
+        width: '100%',
+        height: 120,
+        borderRadius: 14,
+        border: 'none',
+        padding: 18,
+        cursor: empty ? 'not-allowed' : 'pointer',
+        background: empty ? 'var(--bg-soft)' : MOOD_GRADIENTS[mood],
+        color: empty ? 'var(--fg-mute)' : '#0a0a0a',
+        opacity: empty ? 0.55 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        fontFamily: 'inherit',
+        boxShadow: empty ? 'none' : '0 6px 18px rgba(0,0,0,0.25)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 26,
+          fontWeight: 600,
+          letterSpacing: '-0.02em',
+        }}
+      >
+        {MOOD_LABELS[mood]}
+      </div>
+    </button>
+  )
+}
+
+interface DebugSectionProps {
+  tracks: LibraryTrack[]
+}
+
+function DebugSection({ tracks }: DebugSectionProps) {
+  return (
+    <pre style={{ fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', color: 'var(--fg-mute)', margin: 0 }}>
+      {dumpFeatures(tracks)}
+    </pre>
+  )
+}
