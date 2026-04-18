@@ -46,3 +46,34 @@ export async function startSystemCapture(): Promise<SystemCaptureInfo> {
 
 export async function stopSystemCapture(): Promise<void> {
   if (stream) {
+    for (const track of stream.getTracks()) track.stop()
+    stream = null
+  }
+  if (audioContext) {
+    try { await audioContext.close() } catch {}
+    audioContext = null
+  }
+  analyser = null
+  lastAudioData = new Float32Array(BIN_COUNT)
+  lastEnergy = 0
+}
+
+export function processSystemAudioFrame(): { audioData: Float32Array; energy: number } {
+  if (!analyser) return { audioData: lastAudioData, energy: lastEnergy }
+
+  const raw = new Float32Array(analyser.frequencyBinCount)
+  analyser.getFloatFrequencyData(raw)
+
+  const out = new Float32Array(BIN_COUNT)
+  let sum = 0
+  for (let i = 0; i < BIN_COUNT; i++) {
+    const db = raw[i] ?? -100
+    const v = Math.max(0, (db + 100) / 100)
+    out[i] = v
+    sum += v
+  }
+
+  lastAudioData = out
+  lastEnergy = sum / BIN_COUNT
+  return { audioData: out, energy: lastEnergy }
+}
