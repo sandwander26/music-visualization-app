@@ -1,7 +1,10 @@
 import { useThemeStore } from './store/themeStore'
 import { useUIStore } from './store/uiStore'
 import { VisualizersGallery } from './pages/VisualizersGallery'
+import { Library } from './pages/Library'
+import { Wave } from './pages/Wave'
 import { TopNav } from './components/TopNav'
+import { MiniPlayer } from './components/MiniPlayer'
 import ProfileModal from './components/ProfileModal'
 import SettingsModal from './components/SettingsModal'
 import './styles/theme.css'
@@ -19,7 +22,10 @@ function App() {
       <TopNav />
       <main className="page">
         {currentTab === 'gallery' && <VisualizersGallery />}
+        {currentTab === 'library' && <Library />}
+        {currentTab === 'wave' && <Wave />}
       </main>
+      <MiniPlayer />
       {profileOpen ? <ProfileModal onClose={() => setProfileOpen(false)} /> : null}
       {settingsOpen ? <SettingsModal onClose={() => setSettingsOpen(false)} /> : null}
     </div>
