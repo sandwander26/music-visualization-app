@@ -586,3 +586,199 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     }
 
     try {
+      const manifest = await loadLibraryManifest()
+      const restored: LibraryTrack[] = []
+      for (const p of manifest) {
+        let coverUrl: string | null = null
+        if (p.coverPath) {
+          try {
+            coverUrl = await loadCoverObjectUrl(p.coverPath)
+          } catch (err) {
+            console.warn('[library] обложка недоступна для', p.id, err)
+          }
+        }
+        let addedAtMs = Date.parse(p.addedAt)
+        if (!Number.isFinite(addedAtMs)) addedAtMs = Date.now()
+
+        const baseMeta = {
+          title: p.title,
+          artist: p.artist,
+          album: p.album,
+          cover: '',
+        }
+        const mergedDisplay = p.originalFileName?.trim()
+          ? mergeTrackDisplayFromFilename(p.originalFileName.trim(), baseMeta)
+          : baseMeta
+
+        restored.push({
+          id: p.id,
+          originalFileName: p.originalFileName ?? null,
+          sourceFileSize: p.sourceFileSize ?? null,
+          name: mergedDisplay.title,
+          artist: mergedDisplay.artist,
+          album: mergedDisplay.album,
+          cover: coverUrl,
+          duration: p.durationSec,
+          addedAt: addedAtMs,
+          audioPath: p.audioPath,
+          coverPath: p.coverPath,
+          features: p.features ?? undefined,
+          moodWeights: p.moodWeights ?? undefined,
+        })
+      }
+      set({ tracks: restored })
+
+      for (const t of restored) {
+        if (!t.cover) catalogCoverFinished.delete(t.id)
+      }
+
+      for (const t of restored) {
+        if (!t.features) enqueueAnalysis(t.id)
+      }
+      for (const t of restored) {
+        if (!t.cover) {
+          void enrichLibraryTrackCoverFromCatalog(t.id, t.artist, t.name, t.duration)
+        }
+      }
+      queueUnifyAlbumCoversInLibrary()
+    } catch (err) {
+      console.warn('[library] загрузка библиотеки упала:', err)
+    } finally {
+      set({ isLoadingFromDisk: false })
+    }
+  },
+
+  persistManifest: async () => {
+    await persistCurrentManifest()
+  },
+
+  getNextTrack: () => {
+    const { tracks, currentTrackId } = get()
+    if (tracks.length === 0) return null
+    const idx = currentTrackId ? tracks.findIndex((t) => t.id === currentTrackId) : -1
+    const next = idx === -1 ? 0 : (idx + 1) % tracks.length
+    return tracks[next]
+  },
+
+  getPrevTrack: () => {
+    const { tracks, currentTrackId } = get()
+    if (tracks.length === 0) return null
+    const idx = currentTrackId ? tracks.findIndex((t) => t.id === currentTrackId) : -1
+    const prev = idx === -1 ? tracks.length - 1 : (idx - 1 + tracks.length) % tracks.length
+    return tracks[prev]
+  },
+
+  applyEnrichedCover: (trackId, coverUrl) => {
+    void (async () => {
+      let coverPath: string | null =
+        useLibraryStore.getState().tracks.find((t) => t.id === trackId)?.coverPath ?? null
+      if (isPersistenceAvailable()) {
+        try {
+          const blob = await fetch(coverUrl).then((r) => r.blob())
+          if (blob.size > 0) {
+            coverPath = await saveCoverBlob(blob, trackId)
+          }
+        } catch (err) {
+          console.warn('[library] не удалось сохранить обложку', trackId, err)
+        }
+      }
+      set((s) => ({
+        tracks: s.tracks.map((t) => {
+          if (t.id !== trackId) return t
+          const prev = t.cover
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+          return { ...t, cover: coverUrl, coverPath: coverPath ?? t.coverPath }
+        }),
+      }))
+      await persistCurrentManifest()
+      const { scheduleCloudPush } = await import('../services/cloudSync')
+      scheduleCloudPush('cover')
+    })()
+  },
+
+  syncTrackDisplayFromAudio: (trackId?: string | null) => {
+    const tid = trackId ?? get().currentTrackId
+    if (!tid) return
+    const tr = get().tracks.find((t) => t.id === tid)
+    if (!tr) return
+    const { trackInfo } = useAudioStore.getState()
+    const name = trackInfo.title.trim() ? trackInfo.title.trim() : tr.name
+    const artist = trackInfo.artist.trim() ? trackInfo.artist.trim() : tr.artist
+    const album = trackInfo.album.trim() ? trackInfo.album.trim() : tr.album
+    if (tr.name !== name || tr.artist !== artist || tr.album !== album) {
+      set((s) => ({
+        tracks: s.tracks.map((t) =>
+          t.id === tid ? { ...t, name, artist, album } : t,
+        ),
+      }))
+      void persistCurrentManifest()
+    }
+    queueUnifyAlbumCoversInLibrary()
+  },
+}))
+
+const catalogCoverInflight = new Map<string, Promise<void>>()
+const catalogCoverFinished = new Set<string>()
+
+export async function enrichLibraryTrackCoverFromCatalog(
+  trackId: string,
+  artist: string,
+  title: string,
+  durationSec?: number,
+): Promise<void> {
+  if (catalogCoverFinished.has(trackId)) return
+  let task = catalogCoverInflight.get(trackId)
+  if (!task) {
+    task = (async () => {
+      const t = title.trim()
+      if (!t) return
+
+      let tr = useLibraryStore.getState().tracks.find((x) => x.id === trackId)
+      if (!tr || tr.cover) return
+
+      const donorFirst = pickAlbumCoverDonor(useLibraryStore.getState().tracks, tr.artist, tr.album)
+      if (
+        donorFirst &&
+        donorFirst.id !== trackId &&
+        (await cloneCoverFromDonorToTrack(trackId, donorFirst))
+      ) {
+        return
+      }
+
+      const tmpUrl = await resolveCoverBlobUrl({
+        artist,
+        title: t,
+        durationSec,
+      })
+      if (!tmpUrl) return
+
+      tr = useLibraryStore.getState().tracks.find((x) => x.id === trackId)
+      if (!tr || tr.cover) {
+        URL.revokeObjectURL(tmpUrl)
+        return
+      }
+
+      let blob: Blob
+      try {
+        blob = await fetch(tmpUrl).then((r) => r.blob())
+      } catch {
+        URL.revokeObjectURL(tmpUrl)
+        return
+      }
+      URL.revokeObjectURL(tmpUrl)
+
+      tr = useLibraryStore.getState().tracks.find((x) => x.id === trackId)
+      if (!tr || tr.cover) return
+
+      const url = URL.createObjectURL(blob)
+      useLibraryStore.getState().applyEnrichedCover(trackId, url)
+    })()
+
+    catalogCoverInflight.set(trackId, task)
+    void task.finally(() => {
+      catalogCoverInflight.delete(trackId)
+      catalogCoverFinished.add(trackId)
+    })
+  }
+  return task
+}

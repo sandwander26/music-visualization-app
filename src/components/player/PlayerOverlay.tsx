@@ -321,3 +321,142 @@ export default function PlayerOverlay() {
                         <VolumeControl />
 
                         <div style={{ borderTop: '1px solid var(--border)' }} />
+
+                        <ActionButtons hasTrack={hasTrack} onOpenParams={() => setPanelView('params')} />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="params-view"
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 8 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        style={{
+                          padding: 24,
+                          paddingBottom: 56,
+                          gap: 18,
+                          overflowY: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          flex: 1,
+                        }}
+                      >
+                        <ParamsPanel
+                          visualizerId={viz.id}
+                          visualizerName={viz.name}
+                          onBack={() => setPanelView('player')}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </aside>
+              </div>
+
+              <div
+                className="absolute inset-x-0 bottom-0 flex items-center justify-center"
+                style={{
+                  gap: 14,
+                  padding: '14px 16px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10,
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  color: 'var(--fg-mute)',
+                  borderTop: '1px solid var(--border)',
+                  background: 'var(--bg-soft)',
+                }}
+              >
+                <NavBtn onClick={() => cycleVisualizer('prev', allIds)} title="Предыдущий (←)">
+                  <ChevronLeft size={12} />
+                  <span>{prevViz.name}</span>
+                </NavBtn>
+                <span style={{ opacity: 0.5 }}>·</span>
+                <span>
+                  {vizIndex + 1} из {allViz.length}
+                </span>
+                <span style={{ opacity: 0.5 }}>·</span>
+                <NavBtn onClick={() => cycleVisualizer('next', allIds)} title="Следующий (→)">
+                  <span>{nextViz.name}</span>
+                  <ChevronRight size={12} />
+                </NavBtn>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+interface NavBtnProps {
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+}
+
+function NavBtn({ onClick, title, children }: NavBtnProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        background: 'transparent',
+        border: 'none',
+        color: 'inherit',
+        font: 'inherit',
+        letterSpacing: 'inherit',
+        textTransform: 'inherit',
+        cursor: 'pointer',
+        padding: '4px 6px',
+        borderRadius: 4,
+      }}
+      className="hov-fg t-color-border"
+    >
+      {children}
+    </button>
+  )
+}
+
+interface FullscreenStageProps {
+  vizId: string
+  onExit: () => void
+}
+
+function FullscreenStage({ vizId, onExit }: FullscreenStageProps) {
+  return (
+    <>
+      <VisualizerStage vizId={vizId} isFullscreen={true} />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onExit()
+        }}
+        title="Выйти из фуллскрина (Esc)"
+        style={{
+          position: 'fixed',
+          top: 16,
+          right: 16,
+          zIndex: 201,
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          border: '1px solid rgba(255,255,255,0.15)',
+          background: 'rgba(0,0,0,0.5)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
+        <Minimize2 size={16} />
+      </button>
+    </>
+  )
+}

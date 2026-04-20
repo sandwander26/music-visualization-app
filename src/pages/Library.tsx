@@ -313,3 +313,212 @@ export default function Library() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={{ duration: 0.25 }}
+                style={{ position: 'relative' }}
+              >
+                {selectMode ? (
+                  <SelectCheckbox
+                    checked={selectedIds.has(t.id)}
+                    onChange={() => toggleSelected(t.id)}
+                    variant="grid"
+                  />
+                ) : null}
+                <TrackGridCard
+                  track={t}
+                  isActive={t.id === currentTrackId}
+                  isPlaying={isPlaying && t.id === currentTrackId}
+                  onPlay={() => (selectMode ? toggleSelected(t.id) : void playTrack(t))}
+                  onRemove={() => removeTrack(t.id)}
+                  needsLocalFile={trackNeedsLocalFile(t)}
+                  hasCloudAudio={cloudAudioTrackIds.includes(t.id)}
+                  cloudBusy={cloudBusyId === t.id}
+                  onCloudDownload={
+                    loggedIn && trackNeedsLocalFile(t) && cloudAudioTrackIds.includes(t.id)
+                      ? () => void cloudDownload(t.id)
+                      : undefined
+                  }
+                  onCloudUpload={
+                    loggedIn && !trackNeedsLocalFile(t) && !cloudAudioTrackIds.includes(t.id)
+                      ? () => void cloudUpload(t.id)
+                      : undefined
+                  }
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      )}
+
+      <AnimatePresence>
+        {dragOver ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[40] flex items-center justify-center pointer-events-none"
+            style={{
+              background: 'color-mix(in srgb, var(--bg) 85%, transparent)',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            <div
+              style={{
+                padding: '40px 64px',
+                borderRadius: 20,
+                border: '2px dashed var(--border-active)',
+                color: 'var(--fg)',
+                fontSize: 18,
+                fontWeight: 600,
+                letterSpacing: '-0.01em',
+                background: 'var(--bg-soft)',
+              }}
+            >
+              Перетащи MP3 сюда
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </main>
+  )
+}
+
+interface ViewToggleProps {
+  view: 'list' | 'grid'
+  onChange: (v: 'list' | 'grid') => void
+}
+
+function ViewToggle({ view, onChange }: ViewToggleProps) {
+  return (
+    <div
+      className="inline-flex items-center"
+      style={{
+        background: 'var(--bg-soft)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: 3,
+        gap: 2,
+      }}
+    >
+      <Btn active={view === 'list'} onClick={() => onChange('list')} title="Список">
+        <Rows3 size={14} />
+      </Btn>
+      <Btn active={view === 'grid'} onClick={() => onChange('grid')} title="Сетка">
+        <LayoutGrid size={14} />
+      </Btn>
+    </div>
+  )
+}
+
+function Btn({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 30,
+        height: 28,
+        borderRadius: 7,
+        border: 'none',
+        background: active ? 'var(--bg-elev)' : 'transparent',
+        color: active ? 'var(--fg)' : 'var(--fg-mute)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'background 0.15s, color 0.15s',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+interface ActionButtonProps {
+  onClick: () => void
+  icon: React.ReactNode
+  children: React.ReactNode
+  variant?: 'default' | 'danger'
+  disabled?: boolean
+}
+
+function ActionButton({ onClick, icon, children, variant = 'default', disabled }: ActionButtonProps) {
+  const danger = variant === 'danger'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: `1px solid ${danger ? 'rgba(239, 68, 68, 0.35)' : 'var(--border)'}`,
+        background: danger ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-soft)',
+        color: danger ? 'rgb(239, 68, 68)' : 'var(--fg)',
+        fontSize: 13,
+        fontWeight: 500,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        fontFamily: 'inherit',
+        transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+interface SelectCheckboxProps {
+  checked: boolean
+  onChange: () => void
+  variant: 'list' | 'grid'
+}
+
+function SelectCheckbox({ checked, onChange, variant }: SelectCheckboxProps) {
+  const isGrid = variant === 'grid'
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onChange()
+      }}
+      aria-label={checked ? 'Снять выбор' : 'Выбрать'}
+      style={{
+        position: 'absolute',
+        top: isGrid ? 8 : '50%',
+        left: isGrid ? 8 : 8,
+        transform: isGrid ? 'none' : 'translateY(-50%)',
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        border: `2px solid ${checked ? 'var(--fg)' : 'var(--border-strong)'}`,
+        background: checked ? 'var(--fg)' : 'rgba(0, 0, 0, 0.4)',
+        color: checked ? 'var(--bg)' : 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 5,
+        backdropFilter: 'blur(4px)',
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
+      {checked ? <Check size={14} strokeWidth={3} /> : null}
+    </button>
+  )
+}
