@@ -282,3 +282,10 @@ body {
   font-weight: 600;
   color: #fff;
 }
+
+.track-cloud-badge {
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: var(--bg-elev);
+}
