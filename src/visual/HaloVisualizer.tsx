@@ -29,7 +29,7 @@ const BG_COLOR = '#000000'
 const BG_COLOR_ARGS: [string] = [BG_COLOR]
 
 const BLOB_BASE_COLOR = '#000000'
-const FRESNEL_POWER = 2.5
+const FRESNEL_POWER = 2.625
 const FRESNEL_INTENSITY = 2.2
 const FRESNEL_ALPHA = 1
 
