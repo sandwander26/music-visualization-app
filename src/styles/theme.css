@@ -289,3 +289,9 @@ body {
   font-size: 11px;
   background: var(--bg-elev);
 }
+
+.track-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  transition: border-color 0.15s, transform 0.15s;
+}
