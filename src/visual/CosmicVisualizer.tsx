@@ -24,7 +24,7 @@ interface CosmicParams {
 
 const CAMERA = { position: [0, 0, 5] as [number, number, number], fov: 45 }
 const BG_COLOR = '#000000'
-const CHROMATIC_OFFSET: [number, number] = [0.0015, 0.0015]
+const CHROMATIC_OFFSET: [number, number] = [0.00, 0.0015]
 const PLANE_SIZE = 2
 
 const PALETTE_COUNT = 6
