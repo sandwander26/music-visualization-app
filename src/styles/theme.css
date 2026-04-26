@@ -295,3 +295,13 @@ body {
   transform: translateY(-2px);
   transition: border-color 0.15s, transform 0.15s;
 }
+
+.mood-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-soft);
+}
