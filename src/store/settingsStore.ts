@@ -108,3 +108,5 @@ export function applyStoredSettingsOnStartup(): void {
   useUIStore.getState().setLibraryView(s.libraryView)
   audioEngine.setVolume(s.defaultVolume)
 }
+
+// validates settings on load
