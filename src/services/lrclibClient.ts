@@ -156,3 +156,135 @@ export async function fetchSyncedLyricsFromLrclib(params: {
 
   const titlesToTry = Array.from(
     new Set(
+      [title, title.replace(/\s*[\u2013\u2014-]\s*.*$/, '').trim()].filter(
+        (x) => x.length > 0,
+      ),
+    ),
+  )
+
+  let sawNetworkError = false
+
+  for (const tt of titlesToTry) {
+    const variants: { artist?: string; useDur: boolean }[] = []
+    if (artistFull) {
+      variants.push({ artist: artistFull, useDur: true })
+      variants.push({ artist: artistFull, useDur: false })
+      if (artistShort && artistShort !== artistFull) {
+        variants.push({ artist: artistShort, useDur: true })
+        variants.push({ artist: artistShort, useDur: false })
+      }
+    } else {
+      variants.push({ useDur: true })
+      variants.push({ useDur: false })
+    }
+
+    for (const v of variants) {
+      const qs = new URLSearchParams()
+      qs.set('track_name', tt)
+      if (v.artist?.trim()) qs.set('artist_name', v.artist.trim())
+      if (album) qs.set('album_name', album)
+      if (v.useDur && dur != null && dur > 0) {
+        qs.set('duration', String(Math.round(dur)))
+      }
+
+      const res = await httpGet(`https://lrclib.net/api/get?${qs.toString()}`)
+      if (res === null) {
+        sawNetworkError = true
+        break
+      }
+      if (!res.ok) continue
+
+      try {
+        const data = (await res.json()) as LrclibTrack
+        const lyrics = pickLyricsFromTrack(data)
+        if (lyrics) return { status: 'ok', text: lyrics }
+      } catch {
+        sawNetworkError = true
+        break
+      }
+    }
+    if (sawNetworkError) break
+  }
+
+  if (sawNetworkError) return { status: 'network' }
+
+  const searchQueries: string[] = []
+  if (artistFull) {
+    searchQueries.push(`${artistFull} ${title}`)
+    if (artistShort !== artistFull) searchQueries.push(`${artistShort} ${title}`)
+  }
+  searchQueries.push(title)
+
+  const probe = await httpGet(
+    `https://lrclib.net/api/search?q=${encodeURIComponent(searchQueries[0] ?? title)}`,
+  )
+  if (probe === null) return { status: 'network' }
+
+  const fromSearch = await trySearchQueries(searchQueries, dur)
+  if (fromSearch) return { status: 'ok', text: fromSearch }
+
+  return { status: 'none' }
+}
+
+export interface LrclibCandidate {
+  label: string
+  syncedText: string
+  durationSec?: number
+  artistName?: string
+  trackName?: string
+}
+
+export function catalogLabelsFromCandidate(c: LrclibCandidate): {
+  artist?: string
+  title?: string
+} {
+  let artist = c.artistName?.trim()
+  let title = c.trackName?.trim()
+  if (artist && title) return { artist, title }
+
+  let rest = c.label.trim()
+  const durSuffix = rest.match(/\s*·\s*\d+(?:\.\d+)?\s*с\s*$/i)
+  if (durSuffix != null && durSuffix.index != null) rest = rest.slice(0, durSuffix.index).trim()
+
+  const m = rest.match(/^(.+?)\s*[—–\-]\s*(.+)$/)
+  if (m) {
+    if (!artist) artist = m[1].trim()
+    if (!title) title = m[2].trim()
+  }
+  return {
+    artist: artist || undefined,
+    title: title || undefined,
+  }
+}
+
+function trackRecordToSyncedCandidate(item: LrclibTrack): LrclibCandidate | null {
+  const text = pickLyricsFromTrack(item)
+  if (!text) return null
+  const dur =
+    item.duration != null && !Number.isNaN(Number(item.duration))
+      ? Number(item.duration)
+      : undefined
+  const labelBase = `${item.artistName ?? '?'} — ${item.trackName ?? '?'}`
+  const label =
+    dur != null ? `${labelBase} · ${Math.round(dur)} с` : labelBase
+  return {
+    label,
+    syncedText: text,
+    durationSec: dur,
+    artistName: item.artistName ?? undefined,
+    trackName: item.trackName ?? undefined,
+  }
+}
+
+export async function fetchGetCachedSyncedCandidate(params: {
+  artist: string
+  title: string
+  album: string
+  durationSec: number
+}): Promise<LrclibCandidate | null> {
+  const rec = await fetchGetCachedTrackRecord(params)
+  if (!rec) return null
+  return trackRecordToSyncedCandidate(rec)
+}
+
+function normLite(s: string): string {
