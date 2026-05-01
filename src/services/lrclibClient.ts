@@ -288,3 +288,109 @@ export async function fetchGetCachedSyncedCandidate(params: {
 }
 
 function normLite(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function sharedTokenHits(a: string, b: string): number {
+  const ta = normLite(a).split(' ').filter((w) => w.length > 2)
+  const tb = new Set(normLite(b).split(' ').filter((w) => w.length > 2))
+  let n = 0
+  for (const w of ta) if (tb.has(w)) n++
+  return n
+}
+
+export interface LyricsMatchContext {
+  durationSec?: number
+  hintArtist: string
+  hintTitle: string
+  filenameArtist?: string
+  filenameTitle?: string
+  
+  strictAutoPick?: boolean
+}
+
+function scoreLyricsCandidateInternal(c: LrclibCandidate, ctx: LyricsMatchContext): number {
+  const dur = ctx.durationSec
+  let score = 0
+
+  if (dur != null && dur > 0 && c.durationSec != null) {
+    score += Math.min(Math.abs(c.durationSec - dur), 200) * 1.4
+  } else {
+    score += 40
+  }
+
+  const ca = c.artistName ?? ''
+  const ct = c.trackName ?? ''
+
+  const pairs: [string, string][] = []
+  if (ctx.filenameTitle?.trim())
+    pairs.push([ctx.filenameArtist?.trim() ?? '', ctx.filenameTitle.trim()])
+  pairs.push([ctx.hintArtist.trim(), ctx.hintTitle.trim()])
+
+  let bonus = 0
+  for (const [ha, ht] of pairs) {
+    if (!ht) continue
+    const st = sharedTokenHits(ht, ct)
+    const sa = ha ? sharedTokenHits(ha, ca) : 0
+    const nca = normLite(ct)
+    const nth = normLite(ht)
+    const sub = nca.includes(nth) || nth.includes(nca)
+    bonus = Math.max(bonus, st * 12 + sa * 9 + (sub ? 38 : 0))
+  }
+
+  score -= bonus
+  return score
+}
+
+function durationDeltaSec(c: LrclibCandidate, durationSec?: number): number | null {
+  if (durationSec == null || durationSec <= 0 || c.durationSec == null) return null
+  return Math.abs(Math.round(c.durationSec) - Math.round(durationSec))
+}
+
+export interface RankedLrclibCandidate extends LrclibCandidate {
+  
+  matchScore: number
+  durationDeltaSec: number | null
+  isRecommended: boolean
+}
+
+export function rankLyricsCandidates(
+  items: LrclibCandidate[],
+  ctx: LyricsMatchContext,
+): RankedLrclibCandidate[] {
+  if (items.length === 0) return []
+
+  const scored = items.map((c) => ({
+    c,
+    internal: scoreLyricsCandidateInternal(c, ctx),
+    durationDeltaSec: durationDeltaSec(c, ctx.durationSec),
+  }))
+
+  scored.sort((a, b) => a.internal - b.internal)
+
+  const top = scored[0]
+  const second = scored[1]
+  const topIsConfident =
+    top.internal <= 42 || (second != null && top.internal < second.internal - 10)
+
+  return scored.map((row, index) => ({
+    ...row.c,
+    matchScore: Math.max(0, Math.min(100, Math.round(100 - row.internal))),
+    durationDeltaSec: row.durationDeltaSec,
+    isRecommended: index === 0 && topIsConfident,
+  }))
+}
+
+export function pickBestLyricsCandidate(
+  items: LrclibCandidate[],
+  ctx: LyricsMatchContext,
+): LrclibCandidate | null {
+  if (items.length === 0) return null
+
+  const ranked = rankLyricsCandidates(items, ctx)
