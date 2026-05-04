@@ -66,3 +66,33 @@ function rewriteImports(src: string): { code: string; warnings: string[] } {
       out.push(`const { ${namedMatch[1].trim()} } = ${globalName};`)
       continue
     }
+
+    const defaultMatch = clause.match(/^(\w+)$/)
+    if (defaultMatch) {
+      out.push(`const ${defaultMatch[1]} = ${globalName}.default ?? ${globalName};`)
+      continue
+    }
+
+    warnings.push(`Не распознан импорт: ${raw.trim()}`)
+  }
+
+  return { code: out.join('\n'), warnings }
+}
+
+function rewriteExportDefault(src: string): { code: string; defaultName: string | null } {
+  let out = src
+  let defaultName: string | null = null
+
+  const fnDefault = out.match(/(^|\n)\s*export\s+default\s+function\s+(\w+)/)
+  if (fnDefault) {
+    defaultName = fnDefault[2]
+    out = out.replace(/(^|\n)\s*export\s+default\s+function\s+(\w+)/, '$1function $2')
+  }
+
+  if (!defaultName) {
+    const idDefault = out.match(/(^|\n)\s*export\s+default\s+(\w+)\s*;?/)
+    if (idDefault) {
+      defaultName = idDefault[2]
+      out = out.replace(/(^|\n)\s*export\s+default\s+\w+\s*;?/, '$1')
+    }
+  }
