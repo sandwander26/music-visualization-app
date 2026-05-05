@@ -96,3 +96,35 @@ function rewriteExportDefault(src: string): { code: string; defaultName: string 
       out = out.replace(/(^|\n)\s*export\s+default\s+\w+\s*;?/, '$1')
     }
   }
+
+  if (!defaultName) {
+    if (/(^|\n)\s*export\s+default\s+/.test(out)) {
+      defaultName = '__default__'
+      out = out.replace(/(^|\n)\s*export\s+default\s+/, '$1const __default__ = ')
+    }
+  }
+
+  out = out.replace(/(^|\n)\s*export\s+(const|let|var|function|class)\s+/g, '$1$2 ')
+
+  return { code: out, defaultName }
+}
+
+export function compileUserViz(tsxSource: string): CompileResult {
+  try {
+    const { code: importsRewritten } = rewriteImports(tsxSource)
+    const { code: prepared, defaultName } = rewriteExportDefault(importsRewritten)
+    if (!defaultName) {
+      return {
+        component: null,
+        error: 'Не нашёл default export. Объяви компонент через `export default function Name(...)`.',
+      }
+    }
+
+    const result = Babel.transform(prepared, {
+      filename: 'user-viz.tsx',
+      presets: [
+        ['typescript', { isTSX: true, allExtensions: true, onlyRemoveTypeImports: false }],
+        ['react', { runtime: 'classic' }],
+      ],
+    })
+    const code = result.code
