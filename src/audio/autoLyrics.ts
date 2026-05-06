@@ -153,3 +153,119 @@ export function autoLyricsResultHint(r: AutoLyricsResult): string | null {
 export async function tryAutoAttachLyricsFromCatalog(
   durationSec: number | undefined,
   opts?: AutoLyricsOptions,
+): Promise<AutoLyricsResult> {
+  const forceRetry = opts?.forceRetry ?? false
+  const forceReplace = opts?.forceReplace ?? false
+  const tagsOnly = opts?.tagsOnly ?? false
+  const trustManualMeta = opts?.trustManualMeta ?? false
+  let snap = useAudioStore.getState()
+
+  const name = snap.sourceFileName
+  const size = snap.sourceFileSize
+  if (name == null || size == null) return 'skipped_lines'
+
+  const tk = makeTrackLyricsKey(name, size)
+
+  if (forceReplace) {
+    useAudioStore.getState().setLrcLines([])
+    clearLyricsDiskCache(name, size)
+    snap = useAudioStore.getState()
+  }
+
+  if (snap.lrcLines.length > 0 && !forceReplace) return 'skipped_lines'
+
+  if (forceRetry || forceReplace) resetLyricsCatalogStateForRetry(tk)
+
+  if (isLyricsCatalogFinished(tk)) return 'skipped_done'
+
+  if (!tryBeginLrclibProbe(tk)) return 'skipped_mutex'
+
+  let catalogProbeFinished = true
+
+  try {
+    snap = useAudioStore.getState()
+    const hintArtist = snap.trackInfo.artist
+    const hintTitle = snap.trackInfo.title
+    const album = snap.trackInfo.album?.trim() ?? ''
+    const parsed = name && !tagsOnly ? parseArtistTitleFromFilename(name) : null
+    const effArtist = hintArtist.trim() || parsed?.artist?.trim() || ''
+    const effTitle = hintTitle.trim() || parsed?.title?.trim() || ''
+    const strictAutoPick =
+      !trustManualMeta &&
+      metadataWeakForAutoLyrics({
+        tagArtist: hintArtist,
+        tagTitle: hintTitle,
+        sourceFileName: name,
+      })
+
+    const durOk =
+      durationSec != null && durationSec > 0 ? durationSec : undefined
+
+    if (album && durOk != null && effArtist && effTitle && !strictAutoPick) {
+      const fromCached = await fetchGetCachedSyncedCandidate({
+        artist: effArtist,
+        title: effTitle,
+        album,
+        durationSec: durOk,
+      })
+      if (fromCached) {
+        const after = useAudioStore.getState()
+        if (after.lrcLines.length > 0) return 'skipped_lines'
+        if (
+          after.trackInfo.title !== snap.trackInfo.title ||
+          after.trackInfo.artist !== snap.trackInfo.artist ||
+          after.sourceFileName !== snap.sourceFileName ||
+          after.sourceFileSize !== snap.sourceFileSize
+        )
+          return 'skipped_lines'
+
+        return applyChosenCandidateToStore(fromCached, snap, { trustManualMeta })
+      }
+    }
+
+    const queries = buildQueriesFromSnapshot(snap, tagsOnly)
+
+    const res = await searchSyncedLyricsCandidates(
+      queries,
+      durationSec != null && durationSec > 0 ? durationSec : undefined,
+    )
+
+    if (res.status === 'network') {
+      catalogProbeFinished = false
+      return 'network'
+    }
+    if (res.status !== 'ok' || res.items.length === 0) return 'none'
+
+    const matchCtx = lyricsMatchContextFromSnapshot(snap, durationSec, strictAutoPick)
+    const chosen = resolveChosenLyricsCandidate(res.items, matchCtx, trustManualMeta)
+
+    if (!chosen) return 'ambiguous'
+
+    const after = useAudioStore.getState()
+    if (after.lrcLines.length > 0) return 'skipped_lines'
+    if (
+      after.trackInfo.title !== snap.trackInfo.title ||
+      after.trackInfo.artist !== snap.trackInfo.artist ||
+      after.sourceFileName !== snap.sourceFileName ||
+      after.sourceFileSize !== snap.sourceFileSize
+    )
+      return 'skipped_lines'
+
+    return applyChosenCandidateToStore(chosen, snap, { trustManualMeta })
+  } finally {
+    endLrclibProbe(tk, catalogProbeFinished)
+  }
+}
+
+export async function applyManualMetaAndSearchLyrics(
+  artist: string,
+  title: string,
+  album: string,
+  durationSec: number | undefined,
+): Promise<AutoLyricsResult> {
+  const a = artist.trim()
+  const t = title.trim()
+  const al = album.trim()
+  if (!t) return 'none'
+
+  const st = useAudioStore.getState()
