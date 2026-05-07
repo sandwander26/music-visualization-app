@@ -269,3 +269,119 @@ export async function applyManualMetaAndSearchLyrics(
   if (!t) return 'none'
 
   const st = useAudioStore.getState()
+  const sameMeta =
+    a === st.trackInfo.artist.trim() &&
+    t === st.trackInfo.title.trim() &&
+    al === (st.trackInfo.album?.trim() ?? '')
+
+  if (sameMeta && st.lrcLines.length > 0) {
+    return 'applied'
+  }
+
+  useAudioStore.getState().applyCatalogTrackLabels(a || undefined, t, al || undefined)
+  useAudioStore.getState().setCatalogLabelsFromDiskCache(false)
+
+  return tryAutoAttachLyricsFromCatalog(durationSec, {
+    forceRetry: true,
+    forceReplace: true,
+    tagsOnly: true,
+    trustManualMeta: true,
+  })
+}
+
+export async function fetchRankedLyricsCandidatesForTrack(
+  durationSec: number | undefined,
+  opts?: { tagsOnly?: boolean },
+): Promise<RankedLyricsFetchResult> {
+  const snap = useAudioStore.getState()
+  const queries = buildQueriesFromSnapshot(snap, opts?.tagsOnly ?? false)
+  const res = await searchSyncedLyricsCandidates(
+    queries,
+    durationSec != null && durationSec > 0 ? durationSec : undefined,
+  )
+
+  if (res.status === 'network') return { status: 'network' }
+  if (res.status !== 'ok' || res.items.length === 0) return { status: 'none' }
+
+  const matchCtx = lyricsMatchContextFromSnapshot(snap, durationSec)
+  return { status: 'ok', items: rankLyricsCandidates(res.items, matchCtx) }
+}
+
+export async function applyCatalogLabelsIfPossible(durationSec: number | undefined): Promise<void> {
+  const snap = useAudioStore.getState()
+  if (snap.catalogLabelsFromDiskCache) return
+  const name = snap.sourceFileName
+  const size = snap.sourceFileSize
+  if (name == null || size == null || snap.lrcLines.length === 0) return
+
+  const hintArtist = snap.trackInfo.artist
+  const hintTitle = snap.trackInfo.title
+  const album = snap.trackInfo.album?.trim() ?? ''
+  const parsed = parseArtistTitleFromFilename(name)
+  const effArtist = hintArtist.trim() || parsed?.artist?.trim() || ''
+  const effTitle = hintTitle.trim() || parsed?.title?.trim() || ''
+
+  const durOk =
+    durationSec != null && durationSec > 0 ? durationSec : undefined
+
+  if (album && durOk != null && effArtist && effTitle) {
+    const rec = await fetchGetCachedTrackRecord({
+      artist: effArtist,
+      title: effTitle,
+      album,
+      durationSec: durOk,
+    })
+    const ca = rec?.artistName?.trim()
+    const ct = rec?.trackName?.trim()
+    if (rec && (ca || ct)) {
+      const after = useAudioStore.getState()
+      if (after.sourceFileName !== name || after.sourceFileSize !== size) return
+
+      const plausibleRec = catalogLabelsPlausibleForFile(name, ca, ct)
+      if (plausibleRec) {
+        useAudioStore.getState().applyCatalogTrackLabels(ca, ct)
+      }
+      const prev = readLyricsDiskCache(name, size)
+      if (prev) {
+        writeLyricsDiskCache(name, size, prev.raw, {
+          catalogArtist: plausibleRec ? ca : parsed?.artist,
+          catalogTitle: plausibleRec ? ct : parsed?.title,
+        })
+      }
+      return
+    }
+  }
+
+  const res = await searchSyncedLyricsCandidates(
+    buildLrclibSearchQueries({
+      tagArtist: hintArtist,
+      tagTitle: hintTitle,
+      sourceFileName: name,
+    }),
+    durationSec != null && durationSec > 0 ? durationSec : undefined,
+  )
+
+  if (res.status !== 'ok' || res.items.length === 0) return
+
+  const chosen = resolveBestSyncedLyricsCandidate(res.items, {
+    durationSec,
+    hintArtist,
+    hintTitle,
+    filenameArtist: parsed?.artist,
+    filenameTitle: parsed?.title,
+  })
+  if (!chosen) return
+
+  const after = useAudioStore.getState()
+  if (after.sourceFileName !== name || after.sourceFileSize !== size) return
+
+  const labels = catalogLabelsFromCandidate(chosen)
+  const plausiblePick = catalogLabelsPlausibleForFile(name, labels.artist, labels.title)
+  if (plausiblePick) {
+    useAudioStore.getState().applyCatalogTrackLabels(labels.artist, labels.title)
+  }
+  writeLyricsDiskCache(name, size, chosen.syncedText, {
+    catalogArtist: plausiblePick ? labels.artist : parsed?.artist,
+    catalogTitle: plausiblePick ? labels.title : parsed?.title,
+  })
+}
