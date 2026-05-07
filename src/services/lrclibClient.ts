@@ -394,3 +394,134 @@ export function pickBestLyricsCandidate(
   if (items.length === 0) return null
 
   const ranked = rankLyricsCandidates(items, ctx)
+  const top = ranked[0]
+  if (ctx.strictAutoPick) {
+    return top.isRecommended ? top : null
+  }
+
+  if (items.length === 1) return items[0]
+  if (top.isRecommended) return top
+
+  const dur = ctx.durationSec
+  if (dur != null && dur > 0 && top.durationDeltaSec != null && top.durationDeltaSec <= 5) {
+    return top
+  }
+
+  return null
+}
+
+export function resolveBestSyncedLyricsCandidate(
+  items: LrclibCandidate[],
+  ctx: LyricsMatchContext,
+): LrclibCandidate | null {
+  if (items.length === 0) return null
+  let chosen = pickBestLyricsCandidate(items, ctx)
+  const dur = ctx.durationSec
+  if (
+    !chosen &&
+    !ctx.strictAutoPick &&
+    items[0]?.durationSec != null &&
+    dur != null &&
+    dur > 0
+  ) {
+    const d = Math.abs(items[0].durationSec - dur)
+    if (d <= 22) chosen = items[0]
+  }
+  return chosen
+}
+
+function lyricsDedupeKey(text: string): string {
+  return text.slice(0, 160).replace(/\s+/g, ' ')
+}
+
+async function searchSyncedLyricsCandidatesUncached(
+  uniq: string[],
+  durationSec?: number,
+): Promise<
+  { status: 'ok'; items: LrclibCandidate[] } | { status: 'none' } | { status: 'network' }
+> {
+  const byKey = new Map<string, LrclibCandidate>()
+  let networkFail = false
+
+  type Batch = { arr: LrclibTrack[]; dead: boolean }
+  const batches = await Promise.all(
+    uniq.map(async (q): Promise<Batch> => {
+      const res = await httpGet(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`)
+      if (!res) return { arr: [], dead: true }
+      if (!res.ok) return { arr: [], dead: false }
+      try {
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : []
+        return { arr, dead: false }
+      } catch {
+        return { arr: [], dead: false }
+      }
+    }),
+  )
+
+  for (let i = 0; i < uniq.length; i++) {
+    const { arr, dead } = batches[i]
+    if (dead) networkFail = true
+    for (const item of arr) {
+      const text = pickLyricsFromTrack(item)
+      if (!text) continue
+      const key = lyricsDedupeKey(text)
+      if (byKey.has(key)) continue
+      const dur =
+        item.duration != null && !Number.isNaN(Number(item.duration))
+          ? Number(item.duration)
+          : undefined
+      const labelBase = `${item.artistName ?? '?'} — ${item.trackName ?? '?'}`
+      const label =
+        dur != null ? `${labelBase} · ${Math.round(dur)} с` : labelBase
+      byKey.set(key, {
+        label,
+        syncedText: text,
+        durationSec: dur,
+        artistName: item.artistName ?? undefined,
+        trackName: item.trackName ?? undefined,
+      })
+    }
+  }
+
+  let items = [...byKey.values()]
+  const dur = durationSec
+  if (dur != null && dur > 0) {
+    const target = Math.round(dur)
+    items.sort((a, b) => {
+      const da =
+        a.durationSec != null ? Math.abs(Math.round(a.durationSec) - target) : 99999
+      const db =
+        b.durationSec != null ? Math.abs(Math.round(b.durationSec) - target) : 99999
+      return da - db
+    })
+  }
+
+  items = items.slice(0, 24)
+
+  if (items.length === 0) return networkFail ? { status: 'network' } : { status: 'none' }
+  return { status: 'ok', items }
+}
+
+export async function searchSyncedLyricsCandidates(
+  queries: string[],
+  durationSec?: number,
+): Promise<
+  { status: 'ok'; items: LrclibCandidate[] } | { status: 'none' } | { status: 'network' }
+> {
+  const uniq = [...new Set(queries.map((q) => q.trim()).filter(Boolean))]
+  if (uniq.length === 0) return { status: 'none' }
+
+  const memoKey =
+    [...uniq].sort().join('\x1e') +
+    '\x1f' +
+    (durationSec != null && durationSec > 0 ? String(Math.round(durationSec)) : '')
+
+  const hit = searchSyncMemo.get(memoKey)
+  if (hit) return hit
+
+  const result = await searchSyncedLyricsCandidatesUncached(uniq, durationSec)
+  searchSyncMemo.set(memoKey, result)
+  memoTrimOldest(searchSyncMemo, SEARCH_SYNC_MEMO_MAX)
+  return result
+}
