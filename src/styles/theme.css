@@ -305,3 +305,61 @@ body {
   border-radius: 50%;
   background: var(--bg-soft);
 }
+
+.karaoke-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.karaoke-line {
+  font-size: 32px;
+  font-weight: 600;
+  text-align: center;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+  padding: 16px 24px;
+  max-width: 80%;
+}
+
+.karaoke-line.active {
+  font-size: 48px;
+  color: #fff;
+}
+
+.lyrics-search-modal {
+  width: 600px;
+  max-height: 80vh;
+}
+
+.lyrics-search-result {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.lyrics-search-result:hover {
+  background: var(--bg-soft);
+}
+
+.action-btn.active {
+  color: var(--accent);
+  background: var(--bg-elev);
+}
+
+.find-lyrics-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 8px;
+}
