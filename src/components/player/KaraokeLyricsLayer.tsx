@@ -145,3 +145,149 @@ export function KaraokeLyricsLayer({ variant, palette = null }: KaraokeLyricsLay
             inset: 0,
             zIndex: 0,
             pointerEvents: 'none',
+            background: pal.bottomGradient,
+          }}
+        />
+      ) : null}
+
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {lrcLines.length === 0 ? (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: pal?.emptyHintColor ?? 'rgba(255,255,255,0.48)',
+              fontSize: isOverlay ? 'clamp(11px, 2vw, 15px)' : 'clamp(14px, 2vw, 18px)',
+              textAlign: 'center',
+              maxWidth: isOverlay ? 360 : 440,
+              lineHeight: 1.55,
+              margin: '0 auto',
+              padding: '0 8px',
+              pointerEvents: 'auto',
+              gap: isOverlay ? 10 : 14,
+            }}
+          >
+            {hasTrackMeta ? (
+              <>
+                <p style={{ margin: 0 }}>
+                  Текст для этого трека ещё не загружен. Откройте поиск рядом с названием трека или
+                  нажмите кнопку ниже.
+                </p>
+                {sourceFileName ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      opacity: 0.62,
+                      wordBreak: 'break-word',
+                      color: pal?.emptyHintMuted,
+                    }}
+                  >
+                    {trackArtist.trim() || '—'} — {trackTitle.trim()}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setLyricsSearchOpen(true)}
+                  style={{
+                    padding: isOverlay ? '8px 12px' : '10px 16px',
+                    borderRadius: 10,
+                    border: `1px solid ${pal?.chipBorder ?? 'rgba(255,255,255,0.22)'}`,
+                    background: pal?.chipBg ?? 'rgba(255,255,255,0.08)',
+                    color: pal?.chipFg ?? '#f2f0ff',
+                    fontSize: isOverlay ? 12 : 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Найти текст
+                </button>
+              </>
+            ) : (
+              <p style={{ margin: 0, pointerEvents: 'none' }}>
+                Загрузите трек — затем найдите синхронизированный текст через кнопку рядом с
+                названием.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div
+            onScroll={onScrollContainer}
+            style={{
+              pointerEvents: 'auto',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              padding: `${scrollPaddingTop} 0 12px`,
+              boxSizing: 'border-box',
+              scrollbarWidth: 'thin',
+              fontFamily: KARAOKE_LYRICS_FONT,
+            }}
+          >
+            {lrcLines.map((line, globalIdx) => {
+              const isActive = globalIdx === idx
+              const dist = idx >= 0 ? Math.abs(globalIdx - idx) : 6
+              const opacity = isActive ? 1 : Math.max(0.2, 0.55 - dist * 0.07)
+              const scale = isActive ? (beat ? 1.05 : 1.02) : 0.96
+
+              return (
+                <div
+                  key={`${line.time}-${globalIdx}`}
+                  ref={(el) => {
+                    lineRefs.current[globalIdx] = el
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Перейти к этой строке"
+                  onClick={() => onLineActivate(line.time)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onLineActivate(line.time)
+                    }
+                  }}
+                  style={{
+                    color: isActive ? lyricsPal.activeLineColor : lyricsPal.inactiveLineColor,
+                    fontSize: isActive ? KARAOKE_LINE_FS_ACTIVE : KARAOKE_LINE_FS_INACTIVE,
+                    fontWeight: isActive ? 700 : 500,
+                    opacity,
+                    transform: `scale(${scale})`,
+                    transition:
+                      'opacity 0.38s ease, transform 0.1s ease, color 0.35s ease, font-size 0.35s ease',
+                    margin: 'clamp(6px, 1vh, 12px) auto',
+                    boxSizing: 'border-box',
+                    width: 'fit-content',
+                    maxWidth: 'min(96%, 720px)',
+                    textAlign: 'center',
+                    lineHeight: 1.35,
+                    textShadow: isActive ? lyricsPal.activeShadow : lyricsPal.inactiveShadow,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                  }}
+                >
+                  {line.text}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
