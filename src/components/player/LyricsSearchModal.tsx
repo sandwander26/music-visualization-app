@@ -246,3 +246,221 @@ export default function LyricsSearchModal() {
       const r = await applyManualMetaAndSearchLyrics(artist, title, album, dur > 0 ? dur : undefined)
       if (r === 'applied') {
         showLyricsSuccess()
+        return
+      }
+      const hint = autoLyricsResultHint(r)
+      if (hint) setLyricsHint(hint)
+      else setLyricsHint('')
+      if (r === 'ambiguous') {
+        await runAlternativesPicker(true)
+      }
+    } finally {
+      lrclibBusyRef.current = false
+      setLrclibBusy(false)
+    }
+  }, [editAlbum, editArtist, editTitle, runAlternativesPicker, showLyricsSuccess])
+
+  const runCatalogRetry = useCallback(async () => {
+    if (!hasTrackMeta || lrclibBusyRef.current) return
+    lrclibBusyRef.current = true
+    setLrclibBusy(true)
+    setSuccessBanner('')
+    setLyricsHint('подбор текста из каталога…')
+    try {
+      const dur = audioEngine.getDuration()
+      const r = await tryAutoAttachLyricsFromCatalog(dur > 0 ? dur : undefined, {
+        forceRetry: true,
+        forceReplace: true,
+      })
+      if (r === 'applied') {
+        showLyricsSuccess()
+        return
+      }
+      const hint = autoLyricsResultHint(r)
+      if (hint) setLyricsHint(hint)
+      else setLyricsHint('')
+      if (r === 'ambiguous') {
+        await runAlternativesPicker(false)
+      }
+    } finally {
+      lrclibBusyRef.current = false
+      setLrclibBusy(false)
+    }
+  }, [hasTrackMeta, runAlternativesPicker, showLyricsSuccess])
+
+  const onPickLrc = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    void audioEngine.loadLrcFile(file).then((ok) => {
+      if (ok) {
+        showLyricsSuccess(true)
+      } else {
+        setSuccessBanner('')
+        setLyricsHint('не удалось разобрать .lrc')
+      }
+    })
+  }, [showLyricsSuccess])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="overlay"
+      onClick={() => setLyricsSearchOpen(false)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lyrics-search-title"
+    >
+      <div
+        className="modal-card"
+        style={{ maxWidth: 460, position: 'relative' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setLyricsSearchOpen(false)}
+          title="Закрыть"
+          aria-label="Закрыть"
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-soft)',
+            color: 'var(--fg-mute)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <X size={14} />
+        </button>
+
+        <h2
+          id="lyrics-search-title"
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            margin: '0 40px 8px 0',
+            color: 'var(--fg)',
+          }}
+        >
+          Поиск текста
+        </h2>
+        <p style={{ margin: '0 0 16px', fontSize: 14, lineHeight: 1.5, color: 'var(--fg-soft)' }}>
+          Уточни метаданные и найди синхронизированный текст в каталоге LRCLIB или загрузи файл .lrc.
+        </p>
+
+        {!sourceFileName ? (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--fg-mute)' }}>
+            Сначала загрузите трек — поиск текста доступен для текущего файла.
+          </p>
+        ) : (
+          <>
+            <div
+              style={{
+                marginBottom: 14,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-soft)',
+                fontSize: 12,
+                lineHeight: 1.45,
+                color: 'var(--fg-mute)',
+              }}
+            >
+              <div>файл: {sourceFileName}</div>
+              <div style={{ marginTop: 4 }}>
+                сейчас: {trackArtist.trim() || '—'} — {trackTitle.trim()}
+              </div>
+              {parsedFromFile ? (
+                <div style={{ marginTop: 4 }}>
+                  из имени: {parsedFromFile.artist || '—'} — {parsedFromFile.title}
+                </div>
+              ) : null}
+            </div>
+
+            {lrcLines.length > 0 ? (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--premium-border)',
+                  background: 'var(--premium-bg)',
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: 'var(--fg-soft)',
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  Сейчас загружен синхронный текст ({lrcLines.length} строк). Если он не совпадает с
+                  треком — сбросьте и найдите заново.
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  style={{ width: '100%' }}
+                  disabled={lrclibBusy}
+                  onClick={clearCurrentLyrics}
+                >
+                  Сбросить текущий текст
+                </button>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <label className="auth-modal__label" htmlFor="lyrics-search-artist">
+                Исполнитель
+              </label>
+              <div className="auth-modal__input-shell">
+                <input
+                  id="lyrics-search-artist"
+                  className="auth-modal__input"
+                  value={editArtist}
+                  onChange={(e) => {
+                    setEditArtist(e.target.value)
+                    setManualMetaDirty(true)
+                  }}
+                  placeholder="Например: Travis Scott"
+                />
+              </div>
+
+              <label className="auth-modal__label" htmlFor="lyrics-search-title-input">
+                Название
+              </label>
+              <div className="auth-modal__input-shell">
+                <input
+                  id="lyrics-search-title-input"
+                  className="auth-modal__input"
+                  value={editTitle}
+                  onChange={(e) => {
+                    setEditTitle(e.target.value)
+                    setManualMetaDirty(true)
+                  }}
+                  placeholder="Название композиции"
+                />
+              </div>
+
+              <label className="auth-modal__label" htmlFor="lyrics-search-album">
+                Альбом <span style={{ opacity: 0.65 }}>(необязательно)</span>
+              </label>
+              <div className="auth-modal__input-shell">
+                <input
+                  id="lyrics-search-album"
+                  className="auth-modal__input"
+                  value={editAlbum}
+                  onChange={(e) => {
+                    setEditAlbum(e.target.value)
+                    setManualMetaDirty(true)
+                  }}
+                  placeholder="Уточняет поиск в каталоге"
+                />
+              </div>
+            </div>
