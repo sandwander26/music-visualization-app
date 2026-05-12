@@ -13,6 +13,10 @@ interface UIState {
   setProfileOpen: (v: boolean) => void
   settingsOpen: boolean
   setSettingsOpen: (v: boolean) => void
+  lyricsSearchOpen: boolean
+  setLyricsSearchOpen: (v: boolean) => void
+  karaokeOverlay: boolean
+  setKaraokeOverlay: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -26,4 +30,8 @@ export const useUIStore = create<UIState>((set) => ({
   setProfileOpen: (profileOpen) => set({ profileOpen }),
   settingsOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  lyricsSearchOpen: false,
+  setLyricsSearchOpen: (lyricsSearchOpen) => set({ lyricsSearchOpen }),
+  karaokeOverlay: false,
+  setKaraokeOverlay: (karaokeOverlay) => set({ karaokeOverlay }),
 }))
