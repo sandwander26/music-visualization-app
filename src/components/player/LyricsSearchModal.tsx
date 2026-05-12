@@ -464,3 +464,158 @@ export default function LyricsSearchModal() {
                 />
               </div>
             </div>
+
+            {successBanner ? <LyricsSuccessBanner text={successBanner} /> : null}
+
+            <div className="auth-modal__stack">
+              <button
+                type="button"
+                className="btn btn--primary"
+                style={{ width: '100%' }}
+                disabled={!canSearch}
+                onClick={() => void runManualMetaSearch()}
+              >
+                Применить и найти текст
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                style={{ width: '100%' }}
+                disabled={!canSearch}
+                onClick={() => void runCatalogRetry()}
+              >
+                Повторить автоподбор
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                style={{ width: '100%' }}
+                disabled={!canSearch}
+                onClick={() => void runAlternativesPicker(false)}
+              >
+                Альтернативные источники
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                style={{ width: '100%' }}
+                disabled={!sourceFileName || lrclibBusy}
+                onClick={() => lrcPickRef.current?.click()}
+              >
+                Загрузить файл .lrc
+              </button>
+            </div>
+
+            <input
+              ref={lrcPickRef}
+              type="file"
+              accept=".lrc"
+              style={{ display: 'none' }}
+              onChange={onPickLrc}
+            />
+
+            {lyricsHint && !successBanner ? (
+              <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--fg-soft)' }}>{lyricsHint}</p>
+            ) : null}
+          </>
+        )}
+
+        {lrPickerOpen ? (
+          <div
+            style={{
+              marginTop: 16,
+              borderTop: '1px solid var(--border)',
+              paddingTop: 12,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: 'var(--fg)',
+              }}
+            >
+              Варианты из LRCLIB
+            </div>
+            <p style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.45, color: 'var(--fg-mute)' }}>
+              Длительность трека: {formatDurationSec(trackDurationSec > 0 ? trackDurationSec : undefined)}.
+            </p>
+            <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+              {lrCandidates.map((c, i) => {
+                const artist = c.artistName?.trim() || '—'
+                const title = c.trackName?.trim() || c.label
+                return (
+                  <button
+                    key={`${i}-${c.label.slice(0, 48)}`}
+                    type="button"
+                    onClick={() => applyLyricsCandidate(c)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      marginBottom: 6,
+                      borderRadius: 8,
+                      border: c.isRecommended
+                        ? '1px solid var(--premium-border)'
+                        : '1px solid var(--border)',
+                      background: c.isRecommended ? 'var(--premium-bg)' : 'var(--bg-soft)',
+                      color: 'var(--fg)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35 }}>
+                          {artist} — {title}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 11, color: 'var(--fg-mute)' }}>
+                          {c.durationSec != null
+                            ? `${formatDurationSec(c.durationSec)} · ${formatDeltaSec(c.durationDeltaSec)}`
+                            : formatDeltaSec(c.durationDeltaSec)}
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                        <div
+                          style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10,
+                            color: 'var(--fg-soft)',
+                          }}
+                        >
+                          {c.matchScore}%
+                        </div>
+                        {c.isRecommended ? (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontSize: 9,
+                              fontWeight: 700,
+                              letterSpacing: '0.06em',
+                              textTransform: 'uppercase',
+                              color: 'var(--premium)',
+                            }}
+                          >
+                            рекомендуется
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
