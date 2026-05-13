@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { MoodId } from '../audio/moodEngine'
+import type { LrcLine } from '../utils/lrcParser'
 
 export type AudioMode = 'file' | 'system'
 
@@ -25,6 +26,9 @@ interface AudioState {
   currentTime: number
   moodSessions: Partial<Record<MoodId, MoodSession>>
   audioMode: AudioMode
+  lrcLines: LrcLine[] | null
+  sourceFileName: string | null
+  trackPrepareBusy: boolean
   setAudioData: (data: Float32Array) => void
   setPlaying: (playing: boolean) => void
   setBeat: (beat: boolean) => void
@@ -32,6 +36,9 @@ interface AudioState {
   setCurrentTime: (time: number) => void
   updateMoodSession: (mood: MoodId, patch: Partial<MoodSession>) => void
   setAudioMode: (mode: AudioMode) => void
+  setLrcLines: (lines: LrcLine[] | null) => void
+  setSourceFileName: (name: string | null) => void
+  setTrackPrepareBusy: (busy: boolean) => void
 }
 
 export const useAudioStore = create<AudioState>((set) => ({
@@ -42,6 +49,9 @@ export const useAudioStore = create<AudioState>((set) => ({
   currentTime: 0,
   moodSessions: {},
   audioMode: 'file',
+  lrcLines: null,
+  sourceFileName: null,
+  trackPrepareBusy: false,
   setAudioData: (audioData) => set({ audioData }),
   setPlaying: (isPlaying) => set({ isPlaying }),
   setBeat: (beat) => set({ beat }),
@@ -51,4 +61,7 @@ export const useAudioStore = create<AudioState>((set) => ({
     moodSessions: { ...s.moodSessions, [mood]: { ...(s.moodSessions[mood] ?? EMPTY_MOOD_SESSION), ...patch } },
   })),
   setAudioMode: (audioMode) => set({ audioMode }),
+  setLrcLines: (lrcLines) => set({ lrcLines }),
+  setSourceFileName: (sourceFileName) => set({ sourceFileName }),
+  setTrackPrepareBusy: (trackPrepareBusy) => set({ trackPrepareBusy }),
 }))
