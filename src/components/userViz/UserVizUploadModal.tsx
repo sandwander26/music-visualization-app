@@ -155,3 +155,160 @@ export default function UserVizUploadModal({ file, onClose, onUploaded }: UserVi
             padding: '20px 24px',
             display: 'flex',
             flexDirection: 'column',
+            gap: 20,
+            overflowY: 'auto',
+          }}
+        >
+          <CompileStatusBanner state={compile} />
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={MONO_LABEL}>Название</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={60}
+              style={{
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-soft)',
+                color: 'var(--fg)',
+                fontSize: 14,
+                fontFamily: 'inherit',
+                outline: 'none',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--border-active)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)' }}
+            />
+          </label>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span style={MONO_LABEL}>Настроения · хотя бы одно</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {MOOD_ORDER.map((m) => {
+                const checked = moods.has(m)
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleMood(m)}
+                    className="t-button"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 999,
+                      border: `1px solid ${checked ? 'var(--border-active)' : 'var(--border)'}`,
+                      background: checked ? 'var(--bg-elev)' : 'var(--bg-soft)',
+                      color: checked ? 'var(--fg)' : 'var(--fg-soft)',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {MOOD_LABELS[m]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {submitError ? (
+            <div style={{ ...BANNER_BASE, ...ERROR_TINT }}>{submitError}</div>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            padding: '14px 24px 18px',
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '9px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: 'var(--fg-soft)',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            className="t-bg-color"
+            style={{
+              padding: '9px 18px',
+              borderRadius: 8,
+              border: 'none',
+              background: canSubmit ? 'var(--fg)' : 'var(--bg-elev)',
+              color: canSubmit ? 'var(--bg)' : 'var(--fg-mute)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: canSubmit ? 'pointer' : 'not-allowed',
+              fontFamily: 'inherit',
+            }}
+          >
+            {submitLabel()}
+          </button>
+        </div>
+
+    </Modal>
+  )
+}
+
+function Banner({ tint, icon, children, alignTop = false }: { tint: CSSProperties; icon: ReactNode; children: ReactNode; alignTop?: boolean }) {
+  return (
+    <div style={{ ...BANNER_BASE, ...tint, alignItems: alignTop ? 'flex-start' : 'center' }}>
+      {icon}
+      {children}
+    </div>
+  )
+}
+
+function CompileStatusBanner({ state }: { state: CompileState }) {
+  if (state.kind === 'pending') {
+    return (
+      <Banner
+        tint={{ background: 'var(--bg-soft)', border: '1px solid var(--border)', color: 'var(--fg-mute)' }}
+        icon={<Loader2 size={14} style={{ animation: 'uvSpin 0.9s linear infinite' }} />}
+      >
+        Компилирую...
+        <style>{`@keyframes uvSpin { to { transform: rotate(360deg) } }`}</style>
+      </Banner>
+    )
+  }
+  if (state.kind === 'ok') {
+    return (
+      <Banner
+        tint={{ background: 'rgba(34, 197, 94, 0.12)', border: '1px solid rgba(34, 197, 94, 0.35)', color: 'rgb(134, 239, 172)' }}
+        icon={<CheckCircle2 size={14} />}
+      >
+        Код скомпилирован
+      </Banner>
+    )
+  }
+  return (
+    <Banner
+      tint={ERROR_TINT}
+      icon={<AlertCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />}
+      alignTop
+    >
+      <div style={{ wordBreak: 'break-word', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+        {state.message}
+      </div>
+    </Banner>
+  )
+}
