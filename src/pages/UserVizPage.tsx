@@ -175,3 +175,159 @@ export default function UserVizPage() {
               fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <BookOpen size={14} />
+            <span>Как написать</span>
+          </button>
+        </div>
+      </div>
+
+      {visualizers.length === 0 ? (
+        <div
+          style={{
+            minHeight: 240,
+            border: '1px dashed var(--border)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--fg-mute)',
+            fontSize: 14,
+            textAlign: 'center',
+            padding: 24,
+          }}
+        >
+          Пока ничего нет. Начни с шаблона.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div
+          style={{
+            minHeight: 120,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--fg-mute)',
+            fontSize: 14,
+          }}
+        >
+          Ничего не найдено.
+        </div>
+      ) : (
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: 16,
+          }}
+        >
+          {filtered.map((v) => (
+            <UserVizCard
+              key={v.id}
+              vizId={v.id}
+              name={v.name}
+              moods={v.moods}
+              error={v.error}
+              hasComponent={v.component !== null}
+              onOpen={() => openUserViz(v.id)}
+              onDelete={() => handleDelete(v.id, v.name)}
+            />
+          ))}
+        </div>
+      )}
+
+      {pendingFile ? (
+        <UserVizUploadModal
+          file={pendingFile}
+          onClose={() => setPendingFile(null)}
+          onUploaded={() => setPendingFile(null)}
+        />
+      ) : null}
+
+      {docsOpen ? <UserVizDocsModal onClose={() => setDocsOpen(false)} /> : null}
+    </main>
+  )
+}
+
+interface UserVizCardProps {
+  vizId: string
+  name: string
+  moods: MoodId[]
+  error: string | null
+  hasComponent: boolean
+  onOpen: () => void
+  onDelete: () => void
+}
+
+function UserVizCard({ vizId, name, moods, error, hasComponent, onOpen, onDelete }: UserVizCardProps) {
+  const [hover, setHover] = useState(false)
+  const broken = error !== null
+  const canLivePreview = !broken && hasComponent
+
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '4 / 3',
+          minHeight: 180,
+          borderRadius: 14,
+          border: `1px solid ${hover ? 'var(--border-active)' : 'var(--border)'}`,
+          background: broken
+            ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(0,0,0,0.4))'
+            : 'var(--bg-soft)',
+          overflow: 'hidden',
+          padding: 0,
+          display: 'block',
+          textAlign: 'left',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          transition: 'border-color 0.15s, transform 0.15s',
+          transform: hover ? 'translateY(-2px)' : 'translateY(0)',
+        }}
+      >
+        <motion.div
+          className="absolute inset-0"
+          animate={{
+            scale: hover && canLivePreview ? 1.05 : 1,
+            opacity: hover && canLivePreview ? 0 : 1,
+          }}
+          transition={{
+            scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+            opacity: { duration: 0.15 },
+          }}
+        >
+          <PreviewImage vizId={vizId} name={name} />
+        </motion.div>
+
+        <AnimatePresence>
+          {hover && canLivePreview ? (
+            <motion.div
+              key="live"
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <VisualizerHost vizId={vizId} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: 'var(--card-overlay)' }}
+        />
+
+        <div
