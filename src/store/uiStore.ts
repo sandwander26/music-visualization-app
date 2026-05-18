@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type Tab = 'gallery' | 'library' | 'wave'
+type Tab = 'gallery' | 'library' | 'wave' | 'userViz'
 
 interface UIState {
   currentTab: Tab
