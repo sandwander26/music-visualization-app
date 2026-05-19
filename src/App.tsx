@@ -3,6 +3,7 @@ import { useUIStore } from './store/uiStore'
 import { VisualizersGallery } from './pages/VisualizersGallery'
 import { Library } from './pages/Library'
 import { Wave } from './pages/Wave'
+import UserVizPage from './pages/UserVizPage'
 import { TopNav } from './components/TopNav'
 import { MiniPlayer } from './components/MiniPlayer'
 import ProfileModal from './components/ProfileModal'
@@ -27,6 +28,7 @@ function App() {
         {currentTab === 'gallery' && <VisualizersGallery />}
         {currentTab === 'library' && <Library />}
         {currentTab === 'wave' && <Wave />}
+        {currentTab === 'userViz' && <UserVizPage />}
       </main>
       <MiniPlayer />
       {profileOpen ? <ProfileModal onClose={() => setProfileOpen(false)} /> : null}
