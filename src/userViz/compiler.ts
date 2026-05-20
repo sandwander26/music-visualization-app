@@ -128,3 +128,25 @@ export function compileUserViz(tsxSource: string): CompileResult {
       ],
     })
     const code = result.code
+    if (!code) {
+      return { component: null, error: 'Babel вернул пустой результат' }
+    }
+
+    const body = `"use strict";\n${code}\nreturn ${defaultName};`
+
+    const moduleEntries = Object.values(MODULES)
+    const factory = new Function('React', ...moduleEntries.map((m) => m.global), body) as (
+      ...args: unknown[]
+    ) => ComponentType<UserVizProps>
+    const Component = factory(React, ...moduleEntries.map((m) => m.value))
+
+    if (typeof Component !== 'function') {
+      return { component: null, error: 'default export не является компонентом' }
+    }
+
+    return { component: Component, error: null }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { component: null, error: message }
+  }
+}
