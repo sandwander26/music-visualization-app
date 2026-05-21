@@ -1,48 +1,81 @@
-export const TEMPLATE_CANVAS2D = `import { useEffect, useRef } from \'react\'
+export const TEMPLATE_CANVAS2D = `import { useEffect, useRef } from 'react'
 
-export default function MyCanvasViz({ audioData }: { audioData: Float32Array }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  return <canvas ref={canvasRef} width={1920} height={1080} />
+interface VizProps {
+  audioData: Float32Array
+  beat: boolean
+  energy: number
+  currentTime: number
 }
-`
 
-export const TEMPLATE_R3F = `import { Canvas } from \'@react-three/fiber\'
+export default function MyCanvasViz({ audioData, beat, energy, currentTime }: VizProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-export default function MyR3FViz() {
+  // храним свежий снимок аудио в ref, чтобы RAF-цикл всегда видел актуальные значения
+  const audioRef = useRef({ audioData, beat, energy, currentTime })
+  useEffect(() => {
+    audioRef.current = { audioData, beat, energy, currentTime }
+  })
+
+  // setup RAF один раз — иначе мы будем пересоздавать петлю на каждом обновлении звука
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let raf = 0
+    let beatPulse = 0
+
+    const draw = () => {
+      const { beat, energy } = audioRef.current
+      const w = canvas.width
+      const h = canvas.height
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)'
+      ctx.fillRect(0, 0, w, h)
+
+      if (beat) beatPulse = 1
+      beatPulse *= 0.92
+
+      const cx = w / 2
+      const cy = h / 2
+      const baseR = Math.min(w, h) * 0.15
+      const r = baseR + energy * 2400 + beatPulse * 80
+
+      const hue = (Date.now() * 0.05) % 360
+      ctx.fillStyle = \`hsl(\${hue}, 80%, \${55 + energy * 200}%)\`
+      ctx.shadowColor = \`hsla(\${hue}, 80%, 70%, 0.7)\`
+      ctx.shadowBlur = 40
+      ctx.beginPath()
+      ctx.arc(cx, cy, Math.max(10, r), 0, Math.PI * 2)
+      ctx.fill()
+
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   return (
-    <Canvas>
-      <mesh>
-        <boxGeometry />
-        <meshStandardMaterial />
-      </mesh>
-    </Canvas>
+    <canvas
+      ref={canvasRef}
+      width={1920}
+      height={1080}
+      style={{ width: '100%', height: '100%', display: 'block', background: '#000' }}
+    />
   )
 }
 `
 
-export const TEMPLATE_WEBGL = `// raw WebGL template
-import { useEffect, useRef } from \'react\'
-
-export default function MyWebGLViz() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  return <canvas ref={canvasRef} />
-}
-`
-
-export type TemplateKind = \'canvas2d\' | \'r3f\' | \'webgl\'
-
-const TEMPLATES: Record<TemplateKind, { name: string; src: string }> = {
-  canvas2d: { name: \'loomi-canvas2d-template.tsx\', src: TEMPLATE_CANVAS2D },
-  r3f: { name: \'loomi-r3f-template.tsx\', src: TEMPLATE_R3F },
-  webgl: { name: \'loomi-webgl-template.tsx\', src: TEMPLATE_WEBGL },
-}
-
-export function downloadTemplate(kind: TemplateKind): void {
-  const t = TEMPLATES[kind]
-  const blob = new Blob([t.src], { type: \'text/plain;charset=utf-8\' })
+export function downloadTemplate(): void {
+  const blob = new Blob([TEMPLATE_CANVAS2D], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement(\'a\')
+  const a = document.createElement('a')
   a.href = url
-  a.download = t.name
+  a.download = 'loomi-template.tsx'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
   a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
