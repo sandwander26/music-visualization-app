@@ -331,3 +331,113 @@ function UserVizCard({ vizId, name, moods, error, hasComponent, onOpen, onDelete
         />
 
         <div
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 8px',
+            borderRadius: 6,
+            background: 'var(--bg-elev)',
+            border: '1px solid var(--border-strong)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <FileCode2 size={11} style={{ color: 'var(--fg-mute)', flexShrink: 0 }} />
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              fontWeight: 500,
+              color: 'var(--fg)',
+            }}
+          >
+            Свой
+          </div>
+        </div>
+
+        <div
+          className="absolute inset-x-0 bottom-0"
+          style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          <div
+            className="truncate"
+            style={{
+              fontSize: 17,
+              fontWeight: 600,
+              letterSpacing: '-0.015em',
+              color: 'var(--fg)',
+            }}
+          >
+            {name}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {moods.map((m) => (
+              <span
+                key={m}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  fontSize: 10,
+                  fontFamily: 'inherit',
+                  background: 'rgba(0,0,0,0.45)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--fg-soft)',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                {MOOD_LABELS[m]}
+              </span>
+            ))}
+          </div>
+          {broken ? (
+            <div
+              className="truncate"
+              style={{
+                fontSize: 11,
+                color: 'rgb(252,165,165)',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              title={error ?? ''}
+            >
+              ошибка компиляции
+            </div>
+          ) : null}
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+        aria-label="Удалить"
+        className="hov-danger"
+        style={{
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-soft)',
+          color: 'var(--fg-mute)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          opacity: hover ? 1 : 0,
+          transition: 'opacity 0.15s, color 0.15s',
+          zIndex: 2,
+        }}
+      >
+        <X size={13} />
+      </button>
+    </div>
+  )
+}
