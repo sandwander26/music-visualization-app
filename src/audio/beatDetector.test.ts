@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { BeatDetector } from './beatDetector'
 
 function makeFrame(bassLevel: number): Float32Array {
+
   const f = new Float32Array(1024)
   for (let i = 0; i < 14; i++) f[i] = bassLevel
   return f
