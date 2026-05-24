@@ -1,41 +1,63 @@
-export class BeatDetector {
-  private threshold = 1.15
-  private history: number[] = []
-  private maxHistory = 43
-  private holdCounter = 0
-  private beatHold = 22
+const DEFAULT_HISTORY_SIZE = 43
+const BASS_BINS = 14
+const DEFAULT_BEAT_HOLD = 22
 
-  detect(audioData: Float32Array): boolean {
+export interface BeatDetectorOptions {
+  historySize?: number
+  beatHold?: number
+}
+
+export class BeatDetector {
+  energyHistory: number[] = []
+  threshold: number = 1.15
+
+  private readonly historySize: number
+  private readonly beatHold: number
+
+  private holdCounter = 0
+
+  constructor(options: BeatDetectorOptions = {}) {
+    this.historySize = options.historySize ?? DEFAULT_HISTORY_SIZE
+    this.beatHold = options.beatHold ?? DEFAULT_BEAT_HOLD
+  }
+
+  detect(dataArray: Float32Array): boolean {
+    let bassEnergy = 0
+    for (let i = 0; i < BASS_BINS; i++) {
+      bassEnergy += dataArray[i]
+    }
+    bassEnergy /= BASS_BINS
+
+    // бит после прогрева
+    if (this.holdCounter === 0 && this.energyHistory.length >= this.historySize) {
+      let weightedSum = 0
+      let totalWeight = 0
+      for (let i = 0; i < this.energyHistory.length; i++) {
+        const weight = Math.exp(i * 0.05)
+        weightedSum += this.energyHistory[i] * weight
+        totalWeight += weight
+      }
+      const weightedAvg = weightedSum / totalWeight
+      if (bassEnergy > weightedAvg * this.threshold) {
+        this.holdCounter = this.beatHold
+      }
+    }
+
+    this.energyHistory.push(bassEnergy)
+    if (this.energyHistory.length > this.historySize) {
+      this.energyHistory.shift()
+    }
+
     if (this.holdCounter > 0) {
       this.holdCounter--
-      return false
-    }
-
-    let bassEnergy = 0
-    for (let i = 0; i < 14; i++) {
-      bassEnergy += audioData[i]
-    }
-
-    this.history.push(bassEnergy)
-    if (this.history.length > this.maxHistory) {
-      this.history.shift()
-    }
-
-    if (this.history.length < this.maxHistory) {
-      return false
-    }
-
-    const avg = this.history.reduce((sum, v) => sum + v, 0) / this.history.length
-
-    if (bassEnergy > avg * this.threshold) {
-      this.holdCounter = this.beatHold
       return true
     }
     return false
   }
 
+  // сброс для офлайн прогона
   reset(): void {
-    this.history = []
+    this.energyHistory = []
     this.holdCounter = 0
   }
 }
