@@ -18,28 +18,6 @@ export default function VisualizerStage({ vizId, isFullscreen }: VisualizerStage
   const showKaraokeLayer = karaokeOverlay && hasTrack
   const karaokePalette = useMemo(() => getKaraokePalette(vizId), [vizId])
 
-  const emptyHint = !hasTrack ? (
-    <div
-      style={{
-        position: 'absolute',
-        left: '50%',
-        bottom: 24,
-        transform: 'translateX(-50%)',
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11,
-        letterSpacing: '0.16em',
-        textTransform: 'uppercase',
-        color: 'var(--fg-mute)',
-        background: 'rgba(0,0,0,0.5)',
-        padding: '6px 12px',
-        borderRadius: 6,
-        pointerEvents: 'none',
-        zIndex: 10,
-      }}
-    >
-      Закинь трек, чтобы начать
-    </div>
-  ) : null
 
   if (isFullscreen) {
     return (
@@ -75,7 +53,6 @@ export default function VisualizerStage({ vizId, isFullscreen }: VisualizerStage
       {showKaraokeLayer ? (
         <KaraokeLyricsLayer variant="overlay" palette={karaokePalette} />
       ) : null}
-      {emptyHint}
     </div>
   )
 }

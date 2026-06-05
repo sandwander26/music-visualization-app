@@ -23,9 +23,37 @@ export default function PlayerOverlay() {
   const selectedVizId = useUIStore((s) => s.selectedVizId)
   const isFullscreen = useUIStore((s) => s.isFullscreen)
   const closeOverlay = useUIStore((s) => s.closeOverlay)
-  const setFullscreen = useUIStore((s) => s.setFullscreen)
+  const setFullscreenStore = useUIStore((s) => s.setFullscreen)
   const cycleVisualizer = useUIStore((s) => s.cycleVisualizer)
   const setTab = useUIStore((s) => s.setTab)
+
+  const setFullscreen = useCallback((value: boolean) => {
+    setFullscreenStore(value)
+    if (typeof document === 'undefined') return
+    try {
+      if (value) {
+        const el = document.documentElement
+        if (!document.fullscreenElement && el.requestFullscreen) {
+          void el.requestFullscreen().catch(() => {})
+        }
+      } else {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          void document.exitFullscreen().catch(() => {})
+        }
+      }
+    } catch {}
+  }, [setFullscreenStore])
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      const native = Boolean(document.fullscreenElement)
+      if (!native && useUIStore.getState().isFullscreen) {
+        setFullscreenStore(false)
+      }
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [setFullscreenStore])
 
   function goToLibrary() {
     closeOverlay()

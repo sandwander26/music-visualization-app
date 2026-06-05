@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useLibraryStore, type LibraryTrack } from '../store/libraryStore'
+import { useLibraryStore } from '../store/libraryStore'
 import { useAudioStore } from '../store/audioStore'
 import { useUIStore } from '../store/uiStore'
 import { audioEngine } from '../audio/audioEngine'
@@ -35,15 +35,6 @@ const LOADING_DURATION_MS = 2000
 
 function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function dumpFeatures(tracks: LibraryTrack[]): string {
-  if (tracks.length === 0) return '(empty)'
-  return tracks.map((t) => {
-    const f = t.features
-    if (!f) return `${t.name}: ${t.isAnalyzing ? '...' : t.analyzeFailed ? 'failed' : 'pending'}`
-    return `${t.name}: rms=${f.rmsMean.toFixed(3)} centroid=${Math.round(f.centroidMean)} flatness=${f.flatnessMean.toFixed(3)} zcr=${f.zcrMean.toFixed(3)} loudness=${f.loudnessMean.toFixed(2)} rolloff=${Math.round(f.rolloffMean)}`
-  }).join('\n')
 }
 
 export default function Wave() {
@@ -219,8 +210,6 @@ export default function Wave() {
         </AnimatePresence>
       </div>
 
-      <DebugSection tracks={tracks} />
-
       {stage === 'playlist' && selectedMood !== null ? (
         <MoodPlaylistModal
           moodId={selectedMood}
@@ -299,14 +288,3 @@ function MoodCard({ mood, count, onOpenPlaylist }: MoodCardProps) {
   )
 }
 
-interface DebugSectionProps {
-  tracks: LibraryTrack[]
-}
-
-function DebugSection({ tracks }: DebugSectionProps) {
-  return (
-    <pre style={{ fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', color: 'var(--fg-mute)', margin: 0 }}>
-      {dumpFeatures(tracks)}
-    </pre>
-  )
-}
